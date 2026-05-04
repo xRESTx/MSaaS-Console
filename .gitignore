@@ -1,0 +1,17 @@
+.idea/
+.vscode/
+*.iml
+
+target/
+build/
+out/
+
+node_modules/
+dist/
+.vite/
+
+.env
+.env.local
+
+data/
+logs/

@@ -1,0 +1,22 @@
+package com.msaas.instance;
+
+import org.springframework.data.mongodb.repository.MongoRepository;
+
+import java.util.List;
+import java.util.Optional;
+
+public interface MockInstanceRepository extends MongoRepository<MockInstance, String> {
+    List<MockInstance> findByProjectIdOrderByCreatedAtDesc(String projectId);
+
+    Optional<MockInstance> findByIdAndProjectId(String id, String projectId);
+
+    Optional<MockInstance> findByPublicTokenAndStatus(String publicToken, InstanceStatus status);
+
+    List<MockInstance> findByStatus(InstanceStatus status);
+
+    List<MockInstance> findBySpecVersionIdOrderByCreatedAtDesc(String specVersionId);
+
+    void deleteByProjectId(String projectId);
+
+    void deleteBySpecVersionId(String specVersionId);
+}
