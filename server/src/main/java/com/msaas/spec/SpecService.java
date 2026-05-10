@@ -1,6 +1,7 @@
 package com.msaas.spec;
 
 import com.msaas.common.ApiException;
+import com.msaas.audit.AuditService;
 import com.msaas.instance.MockInstance;
 import com.msaas.instance.MockInstanceRepository;
 import com.msaas.log.RequestLogRepository;
@@ -18,6 +19,7 @@ public class SpecService {
     private final MockInstanceRepository instanceRepository;
     private final RequestLogRepository requestLogRepository;
     private final MockRuntimeRegistry runtimeRegistry;
+    private final AuditService auditService;
 
     public SpecService(
             SpecVersionRepository specVersionRepository,
@@ -25,7 +27,8 @@ public class SpecService {
             OpenApiContractParser parser,
             MockInstanceRepository instanceRepository,
             RequestLogRepository requestLogRepository,
-            MockRuntimeRegistry runtimeRegistry
+            MockRuntimeRegistry runtimeRegistry,
+            AuditService auditService
     ) {
         this.specVersionRepository = specVersionRepository;
         this.projectService = projectService;
@@ -33,10 +36,11 @@ public class SpecService {
         this.instanceRepository = instanceRepository;
         this.requestLogRepository = requestLogRepository;
         this.runtimeRegistry = runtimeRegistry;
+        this.auditService = auditService;
     }
 
-    public SpecVersion create(String ownerId, String projectId, String name, String source) {
-        projectService.requireOwnedProject(projectId, ownerId);
+    public SpecVersion create(String actorId, String projectId, String name, String source) {
+        projectService.requireProjectWriteAccess(projectId, actorId);
         int versionNumber = (int) specVersionRepository.countByProjectId(projectId) + 1;
         OpenApiContractParser.ParsedContract parsed = parser.parse(source);
 
@@ -49,7 +53,9 @@ public class SpecService {
         );
         version.setValidationErrors(parsed.errors());
         version.setNormalizedContract(parsed.contract());
-        return specVersionRepository.save(version);
+        SpecVersion saved = specVersionRepository.save(version);
+        auditService.record(projectId, actorId, "SPEC_UPLOADED", "specVersion", saved.getId(), "Specification version uploaded");
+        return saved;
     }
 
     public List<SpecVersion> list(String projectId) {
@@ -63,22 +69,30 @@ public class SpecService {
         return version;
     }
 
-    public SpecVersion requireValidOwnedVersion(String versionId, String ownerId) {
-        SpecVersion version = requireOwnedVersion(versionId, ownerId);
+    public SpecVersion requireWritableVersion(String versionId, String actorId) {
+        SpecVersion version = specVersionRepository.findById(versionId)
+                .orElseThrow(() -> ApiException.notFound("Specification version not found"));
+        projectService.requireProjectWriteAccess(version.getProjectId(), actorId);
+        return version;
+    }
+
+    public SpecVersion requireValidWritableVersion(String versionId, String actorId) {
+        SpecVersion version = requireWritableVersion(versionId, actorId);
         if (version.getStatus() != ValidationStatus.VALID || version.getNormalizedContract() == null) {
             throw ApiException.badRequest("Specification version is not valid");
         }
         return version;
     }
 
-    public void deleteVersion(String versionId, String ownerId) {
-        SpecVersion version = requireOwnedVersion(versionId, ownerId);
+    public void deleteVersion(String versionId, String actorId) {
+        SpecVersion version = requireWritableVersion(versionId, actorId);
         List<MockInstance> instances = instanceRepository.findBySpecVersionIdOrderByCreatedAtDesc(versionId);
         instances.forEach(instance -> {
-            runtimeRegistry.unregister(instance.getPublicToken());
+            runtimeRegistry.unregister(instance.getPublicTokenHash());
             requestLogRepository.deleteByInstanceId(instance.getId());
         });
         instanceRepository.deleteBySpecVersionId(versionId);
         specVersionRepository.delete(version);
+        auditService.record(version.getProjectId(), actorId, "SPEC_DELETED", "specVersion", version.getId(), "Specification version deleted");
     }
 }

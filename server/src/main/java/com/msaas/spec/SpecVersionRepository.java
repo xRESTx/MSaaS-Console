@@ -10,6 +10,8 @@ public interface SpecVersionRepository extends MongoRepository<SpecVersion, Stri
 
     long countByProjectId(String projectId);
 
+    long countByStatus(ValidationStatus status);
+
     Optional<SpecVersion> findByIdAndProjectId(String id, String projectId);
 
     void deleteByProjectId(String projectId);

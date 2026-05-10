@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.Instant;
+import java.util.Map;
 import java.util.List;
 
 @RestController
@@ -35,12 +36,12 @@ public class InstanceController {
             @PathVariable String versionId,
             @Valid @RequestBody PublishRequest request
     ) {
-        return InstanceView.from(instanceService.publish(user.id(), versionId, request.mode()));
+        return InstanceView.from(instanceService.publish(user.id(), versionId, request.mode(), request.requireApiKey()));
     }
 
     @GetMapping("/instances/{instanceId}")
     public InstanceView get(@AuthenticationPrincipal AuthenticatedUser user, @PathVariable String instanceId) {
-        return InstanceView.from(instanceService.requireOwnedInstance(instanceId, user.id()));
+        return InstanceView.from(instanceService.requireAccessibleInstance(instanceId, user.id()));
     }
 
     @DeleteMapping("/instances/{instanceId}")
@@ -53,9 +54,19 @@ public class InstanceController {
         return InstanceView.from(instanceService.resetState(instanceId, user.id()));
     }
 
+    @GetMapping("/instances/{instanceId}/state")
+    public Map<String, Object> state(@AuthenticationPrincipal AuthenticatedUser user, @PathVariable String instanceId) {
+        return instanceService.state(instanceId, user.id());
+    }
+
     @PostMapping("/instances/{instanceId}/rotate-token")
     public InstanceView rotateToken(@AuthenticationPrincipal AuthenticatedUser user, @PathVariable String instanceId) {
         return InstanceView.from(instanceService.rotateToken(instanceId, user.id()));
+    }
+
+    @PostMapping("/instances/{instanceId}/rotate-api-key")
+    public InstanceView rotateApiKey(@AuthenticationPrincipal AuthenticatedUser user, @PathVariable String instanceId) {
+        return InstanceView.from(instanceService.rotateApiKey(instanceId, user.id()));
     }
 
     @GetMapping("/instances/{instanceId}/logs")
@@ -64,7 +75,7 @@ public class InstanceController {
             @PathVariable String instanceId,
             @RequestParam(defaultValue = "50") int limit
     ) {
-        MockInstance instance = instanceService.requireOwnedInstance(instanceId, user.id());
+        MockInstance instance = instanceService.requireAccessibleInstance(instanceId, user.id());
         int boundedLimit = Math.max(1, Math.min(limit, 200));
         return requestLogRepository.findByInstanceIdOrderByReceivedAtDesc(instance.getId(), PageRequest.of(0, boundedLimit))
                 .stream()
@@ -72,7 +83,7 @@ public class InstanceController {
                 .toList();
     }
 
-    public record PublishRequest(InstanceMode mode) {
+    public record PublishRequest(InstanceMode mode, boolean requireApiKey) {
     }
 
     public record InstanceView(
@@ -80,6 +91,10 @@ public class InstanceController {
             String projectId,
             String specVersionId,
             String publicUrl,
+            String tokenPreview,
+            String mockApiKey,
+            String apiKeyPreview,
+            boolean requireApiKey,
             InstanceMode mode,
             InstanceStatus status,
             int routeCount,
@@ -93,6 +108,10 @@ public class InstanceController {
                     instance.getProjectId(),
                     instance.getSpecVersionId(),
                     instance.getPublicUrl(),
+                    instance.getPublicTokenPreview(),
+                    instance.getMockApiKey(),
+                    instance.getApiKeyPreview(),
+                    instance.isRequireApiKey(),
                     instance.getMode(),
                     instance.getStatus(),
                     routeCount,
@@ -108,6 +127,8 @@ public class InstanceController {
             String method,
             String path,
             String queryString,
+            Map<String, String> requestHeaders,
+            String requestBody,
             int responseStatus,
             boolean matched,
             String error,
@@ -121,6 +142,8 @@ public class InstanceController {
                     log.getMethod(),
                     log.getPath(),
                     log.getQueryString(),
+                    log.getRequestHeaders(),
+                    log.getRequestBody(),
                     log.getResponseStatus(),
                     log.isMatched(),
                     log.getError(),

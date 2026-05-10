@@ -1,6 +1,7 @@
 package com.msaas.instance;
 
 import org.springframework.data.mongodb.repository.MongoRepository;
+import org.springframework.data.domain.Pageable;
 
 import java.util.List;
 import java.util.Optional;
@@ -10,9 +11,11 @@ public interface MockInstanceRepository extends MongoRepository<MockInstance, St
 
     Optional<MockInstance> findByIdAndProjectId(String id, String projectId);
 
-    Optional<MockInstance> findByPublicTokenAndStatus(String publicToken, InstanceStatus status);
+    Optional<MockInstance> findByPublicTokenHashAndStatus(String publicTokenHash, InstanceStatus status);
 
     List<MockInstance> findByStatus(InstanceStatus status);
+
+    List<MockInstance> findAllByOrderByCreatedAtDesc(Pageable pageable);
 
     List<MockInstance> findBySpecVersionIdOrderByCreatedAtDesc(String specVersionId);
 

@@ -1,6 +1,7 @@
 package com.msaas.spec.contract;
 
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 public class MockRoute {
@@ -8,6 +9,9 @@ public class MockRoute {
     private String pathTemplate;
     private String operationId;
     private int defaultStatusCode;
+    private List<String> requiredQueryParameters = List.of();
+    private List<String> requiredHeaderParameters = List.of();
+    private boolean requestBodyRequired;
     private Map<String, MockResponseDefinition> responses = new LinkedHashMap<>();
 
     public MockRoute() {
@@ -50,6 +54,30 @@ public class MockRoute {
 
     public void setDefaultStatusCode(int defaultStatusCode) {
         this.defaultStatusCode = defaultStatusCode;
+    }
+
+    public List<String> getRequiredQueryParameters() {
+        return requiredQueryParameters;
+    }
+
+    public void setRequiredQueryParameters(List<String> requiredQueryParameters) {
+        this.requiredQueryParameters = requiredQueryParameters == null ? List.of() : requiredQueryParameters;
+    }
+
+    public List<String> getRequiredHeaderParameters() {
+        return requiredHeaderParameters;
+    }
+
+    public void setRequiredHeaderParameters(List<String> requiredHeaderParameters) {
+        this.requiredHeaderParameters = requiredHeaderParameters == null ? List.of() : requiredHeaderParameters;
+    }
+
+    public boolean isRequestBodyRequired() {
+        return requestBodyRequired;
+    }
+
+    public void setRequestBodyRequired(boolean requestBodyRequired) {
+        this.requestBodyRequired = requestBodyRequired;
     }
 
     public Map<String, MockResponseDefinition> getResponses() {

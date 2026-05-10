@@ -7,6 +7,7 @@ import com.msaas.spec.contract.NormalizedContract;
 import io.swagger.parser.OpenAPIParser;
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.Operation;
+import io.swagger.v3.oas.models.parameters.Parameter;
 import io.swagger.v3.oas.models.PathItem;
 import io.swagger.v3.oas.models.media.Content;
 import io.swagger.v3.oas.models.media.MediaType;
@@ -24,15 +25,16 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Stream;
 
 @Component
 public class OpenApiContractParser {
 
     public ParsedContract parse(String source) {
         ParseOptions options = new ParseOptions();
-        options.setResolve(true);
-        options.setResolveFully(true);
-        options.setFlatten(true);
+        options.setResolve(false);
+        options.setResolveFully(false);
+        options.setFlatten(false);
 
         SwaggerParseResult result = new OpenAPIParser().readContents(source, null, options);
         List<String> messages = result.getMessages() == null ? List.of() : result.getMessages();
@@ -56,7 +58,7 @@ public class OpenApiContractParser {
 
         if (openAPI.getPaths() != null) {
             openAPI.getPaths().forEach((path, item) -> item.readOperationsMap().forEach((method, operation) -> {
-                MockRoute route = toRoute(path, method, operation);
+                MockRoute route = toRoute(path, method, item, operation);
                 routes.add(route);
             }));
         }
@@ -64,7 +66,7 @@ public class OpenApiContractParser {
         return new NormalizedContract(title, version, routes);
     }
 
-    private MockRoute toRoute(String path, PathItem.HttpMethod method, Operation operation) {
+    private MockRoute toRoute(String path, PathItem.HttpMethod method, PathItem item, Operation operation) {
         Map<String, MockResponseDefinition> responses = extractResponses(operation.getResponses());
         int defaultStatus = responses.values().stream()
                 .map(MockResponseDefinition::getStatusCode)
@@ -73,10 +75,25 @@ public class OpenApiContractParser {
                 .orElseGet(() -> responses.values().stream().map(MockResponseDefinition::getStatusCode).findFirst().orElse(200));
 
         MockRoute route = new MockRoute(method.name(), path, operation.getOperationId(), defaultStatus);
+        route.setRequiredQueryParameters(requiredParameters(item, operation, "query"));
+        route.setRequiredHeaderParameters(requiredParameters(item, operation, "header"));
+        route.setRequestBodyRequired(operation.getRequestBody() != null && Boolean.TRUE.equals(operation.getRequestBody().getRequired()));
         route.setResponses(responses.isEmpty()
                 ? Map.of("200", new MockResponseDefinition(200, "application/json", Map.of("ok", true), 0))
                 : responses);
         return route;
+    }
+
+    private List<String> requiredParameters(PathItem item, Operation operation, String location) {
+        Stream<Parameter> pathParameters = item.getParameters() == null ? Stream.empty() : item.getParameters().stream();
+        Stream<Parameter> operationParameters = operation.getParameters() == null ? Stream.empty() : operation.getParameters().stream();
+        return Stream.concat(pathParameters, operationParameters)
+                .filter(parameter -> location.equals(parameter.getIn()))
+                .filter(parameter -> Boolean.TRUE.equals(parameter.getRequired()))
+                .map(Parameter::getName)
+                .filter(name -> name != null && !name.isBlank())
+                .distinct()
+                .toList();
     }
 
     private Map<String, MockResponseDefinition> extractResponses(ApiResponses apiResponses) {

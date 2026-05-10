@@ -19,6 +19,7 @@ services:
       JWT_SECRET: replace-this-development-secret-with-at-least-32-bytes
       APP_PUBLIC_BASE_URL: http://localhost:8081
       APP_CORS_ALLOWED_ORIGINS: http://localhost:5173
+      ADMIN_BOOTSTRAP_EMAIL: admin@example.com
     ports:
       - "8081:8081"
 

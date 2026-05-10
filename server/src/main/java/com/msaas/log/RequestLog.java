@@ -5,6 +5,8 @@ import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
 
 import java.time.Instant;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 @Document("request_logs")
 public class RequestLog {
@@ -20,6 +22,7 @@ public class RequestLog {
     private String method;
     private String path;
     private String queryString;
+    private Map<String, String> requestHeaders = new LinkedHashMap<>();
     private String requestBody;
     private int responseStatus;
     private boolean matched;
@@ -89,6 +92,14 @@ public class RequestLog {
 
     public String getRequestBody() {
         return requestBody;
+    }
+
+    public Map<String, String> getRequestHeaders() {
+        return requestHeaders;
+    }
+
+    public void setRequestHeaders(Map<String, String> requestHeaders) {
+        this.requestHeaders = requestHeaders == null ? new LinkedHashMap<>() : requestHeaders;
     }
 
     public void setRequestBody(String requestBody) {

@@ -1,47 +1,77 @@
 # MSaaS Console
 
-**MSaaS Console** is a backend-first Mock Server as a Service platform for creating, publishing, and diagnosing mock APIs from OpenAPI contracts.
+**MSaaS Console** is a Mock Server as a Service platform for private OpenAPI projects, warm Java mock slots, public-by-link mock APIs, request diagnostics, and team access control.
 
-Repository description for GitHub:
+GitHub description:
 
 ```text
-Backend-first Mock Server as a Service platform with private projects, OpenAPI validation, warm Java runtime slots, public mock links, request logs, and a React console.
+Mock Server as a Service with private OpenAPI projects, Java warm runtime slots, hashed public tokens, optional mock API keys, request logs, audit, and a React console.
 ```
 
-## Overview
+## What It Does
 
-The project helps developers and testers continue frontend, integration, and CI/CD work before a real backend service is ready. A user creates a private project, uploads an OpenAPI specification, publishes a mock instance, and receives a long public URL that can be used by a client application as a temporary API dependency.
+MSaaS helps frontend, QA, and integration teams work before a real backend is ready:
 
-The current version is focused on a working backend and a practical web console:
+1. Register or log in.
+2. Create a private project.
+3. Upload an OpenAPI YAML or JSON contract.
+4. Publish a `STATELESS` or `STATEFUL` mock instance.
+5. Call the generated mock URL from an app, Postman, curl, or the built-in console.
+6. Inspect logs, state snapshots, audit events, runtime slots, and worker health.
 
-- private users and projects;
-- OpenAPI upload, parsing, validation, and normalization;
-- mock instance publishing by long public link;
-- Java warm runtime slots instead of one container per instance;
-- basic stateless and stateful CRUD behavior;
-- request logs and diagnostics;
-- token rotation and state reset;
-- deletion of projects, specification versions, and instances with confirmation;
-- light/dark theme;
-- Russian/English UI;
-- adaptive React interface.
-
-## Architecture
-
-The platform follows a hybrid architecture:
-
-- **Control API** manages users, projects, OpenAPI versions, publications, and logs.
-- **Mock Runtime** serves public mock traffic through warm in-process runtime slots.
-- **MongoDB** stores users, projects, specifications, mock instances, and request logs.
-- **React UI** provides a dashboard for the full workflow.
-
-Published mock URLs look like this:
+Published mock traffic uses:
 
 ```text
 http://localhost:8081/mock/{publicToken}/...
 ```
 
-Project management and logs require JWT authentication. Calling a mock URL requires only the long public token.
+The project and logs require JWT. The mock URL is public-by-link. If `requireApiKey` is enabled, calls must also include:
+
+```text
+X-Mock-Api-Key: <key-shown-once>
+```
+
+## Current Feature Set
+
+- Java 25 + Spring Boot 4 backend.
+- MongoDB persistence.
+- JWT auth.
+- Private projects with `OWNER`, `MEMBER`, and `VIEWER` roles.
+- OpenAPI REST parsing, validation, route normalization, examples, and schema-generated responses.
+- Java warm runtime slots rather than a container per mock.
+- Long public mock token stored as a hash in MongoDB.
+- Public URL and mock API key are shown once after publish or rotation.
+- Optional `X-Mock-Api-Key` per instance.
+- Response status override with `__status` or `X-Mock-Status`.
+- Delay override with `__delay` or `X-Mock-Delay-Ms`, capped at 10 seconds.
+- Required query/header/body matching from OpenAPI operations.
+- Stateful CRUD behavior and state snapshot endpoint.
+- Request logs with redacted sensitive headers, query values, and JSON body fields.
+- Audit log for project/spec/instance/member changes.
+- Runtime worker registry and slot introspection endpoints.
+- Unique usernames for day-to-day collaboration; email is used for registration and recovery-style identity.
+- Admin console for platform summary, users, projects, instances, paginated logs, paginated audit, and runtime health.
+- Admin user management: promote/revoke admins, disable/enable users, and delete users with confirmation.
+- Admin deletion for projects and mock instances with the same runtime/log cleanup as normal project flows.
+- Bootstrap admin account by email through `ADMIN_BOOTSTRAP_EMAIL`.
+- Swagger UI at `/swagger-ui.html`.
+- Responsive React console with light/dark theme and RU/EN language switch.
+
+## Architecture
+
+```mermaid
+flowchart LR
+  U["User / Browser"] --> UI["React Console"]
+  UI --> API["Control API (Spring Boot)"]
+  API --> DB["MongoDB"]
+  API --> REG["Runtime Plane Registry"]
+  REG --> SLOT["Java Warm Slots"]
+  C["External Client"] --> MOCK["/mock/{publicToken}/**"]
+  MOCK --> SLOT
+  SLOT --> DB
+```
+
+Runtime is currently embedded in the server process, but the `RuntimePlaneService`, worker heartbeat API, and slot registry create a clear boundary for splitting `mock-runtime` into a separate service later.
 
 ## Tech Stack
 
@@ -49,179 +79,122 @@ Backend:
 
 - Java 25 LTS
 - Spring Boot 4
+- Spring MVC
 - Spring Security
 - Spring Data MongoDB
+- springdoc-openapi
 - Swagger Parser
-- JWT authentication
+- Testcontainers profile for integration tests
 
 Frontend:
 
-- React
+- React 19
 - TypeScript
 - Vite
-- lucide-react icons
-- CSS variables for light/dark themes
+- lucide-react
+- CSS variables for themes
 
 Infrastructure:
 
-- Docker
 - Docker Compose
 - MongoDB 8
 
-## Project Structure
+## Repository Layout
 
 ```text
 .
-├── docker-compose.yml
-├── README.md
-├── server
-│   ├── Dockerfile
-│   ├── pom.xml
-│   └── src
-│       ├── main/java/com/msaas
-│       │   ├── auth
-│       │   ├── config
-│       │   ├── instance
-│       │   ├── log
-│       │   ├── project
-│       │   ├── runtime
-│       │   ├── security
-│       │   ├── spec
-│       │   └── user
-│       └── test/java/com/msaas
-└── ui
-    ├── Dockerfile
-    ├── package.json
-    └── src
+|-- docker-compose.yml
+|-- README.md
+|-- docs
+|   |-- demo-openapi.yaml
+|   `-- msaas-smoke.http
+|-- server
+|   |-- Dockerfile
+|   |-- pom.xml
+|   `-- src
+|       |-- main/java/com/msaas
+|       |   |-- admin
+|       |   |-- audit
+|       |   |-- auth
+|       |   |-- common
+|       |   |-- config
+|       |   |-- instance
+|       |   |-- log
+|       |   |-- project
+|       |   |-- runtime
+|       |   |-- security
+|       |   |-- spec
+|       |   `-- user
+|       `-- test/java/com/msaas
+`-- ui
+    |-- Dockerfile
+    |-- package.json
+    `-- src
 ```
 
-## Running With Docker Compose
+## Run With Docker Compose
 
-Start the full stack:
+Start Docker Desktop first, then:
 
 ```powershell
+cd D:\MSaaS
 docker compose up -d --build
 ```
 
 Open:
 
 - UI: http://localhost:5173
-- Server health: http://localhost:8081/actuator/health
-- MongoDB: `localhost:27017`
+- Health: http://localhost:8081/actuator/health
+- Swagger UI: http://localhost:8081/swagger-ui.html
+- OpenAPI JSON: http://localhost:8081/v3/api-docs
 
-Check containers:
+The first account registered with the email from `ADMIN_BOOTSTRAP_EMAIL` becomes a system admin. Docker Compose uses:
+
+```text
+admin@example.com
+```
+
+Register that email in the UI to unlock the Admin section.
+
+Useful commands:
 
 ```powershell
 docker compose ps
-```
-
-View logs:
-
-```powershell
 docker compose logs -f server
 docker compose logs -f ui
-```
-
-Stop the stack:
-
-```powershell
 docker compose down
-```
-
-Stop and remove MongoDB data:
-
-```powershell
 docker compose down -v
 ```
 
-## Running Locally
+## Run Locally
 
-Backend requires Java 25 and Maven:
+Backend requires Java 25, Maven, and MongoDB:
 
 ```powershell
-cd server
+cd D:\MSaaS\server
+$env:MONGODB_URI="mongodb://localhost:27017/msaas"
+$env:JWT_SECRET="replace-this-development-secret-with-at-least-32-bytes"
+$env:APP_PUBLIC_BASE_URL="http://localhost:8081"
+$env:APP_CORS_ALLOWED_ORIGINS="http://localhost:5173"
 mvn spring-boot:run
 ```
 
 Frontend:
 
 ```powershell
-cd ui
+cd D:\MSaaS\ui
 npm install
 npm run dev
 ```
 
-When running locally, make sure MongoDB is available and set:
+## Main API
 
-```powershell
-$env:MONGODB_URI="mongodb://localhost:27017/msaas"
-$env:JWT_SECRET="replace-this-development-secret-with-at-least-32-bytes"
-$env:APP_PUBLIC_BASE_URL="http://localhost:8081"
-$env:APP_CORS_ALLOWED_ORIGINS="http://localhost:5173"
-```
-
-## Basic Workflow
-
-1. Open http://localhost:5173.
-2. Register or log in.
-3. Create a project.
-4. Upload an OpenAPI YAML or JSON specification.
-5. Check that the version is marked as valid.
-6. Publish a mock instance in `STATELESS` or `STATEFUL` mode.
-7. Copy the public mock URL.
-8. Send test requests from the UI, Postman, curl, PowerShell, or a client application.
-9. Review request logs and matching diagnostics.
-
-## Example Mock Calls
-
-After publishing an instance, copy its public URL:
-
-```powershell
-$mock = "http://localhost:8081/mock/YOUR_PUBLIC_TOKEN"
-```
-
-Call a list endpoint:
-
-```powershell
-Invoke-RestMethod "$mock/orders"
-```
-
-Create a resource:
-
-```powershell
-$order = Invoke-RestMethod "$mock/orders" `
-  -Method Post `
-  -ContentType "application/json" `
-  -Body '{"title":"First order","paid":false}'
-```
-
-Read the created resource:
-
-```powershell
-Invoke-RestMethod "$mock/orders/$($order.id)"
-```
-
-Update it:
-
-```powershell
-Invoke-RestMethod "$mock/orders/$($order.id)" `
-  -Method Put `
-  -ContentType "application/json" `
-  -Body '{"title":"Updated order","paid":true}'
-```
-
-Delete it:
-
-```powershell
-Invoke-WebRequest "$mock/orders/$($order.id)" -Method Delete
-```
-
-## Main API Endpoints
-
-Authentication:
+Auth:
 
 - `POST /api/auth/register`
 - `POST /api/auth/login`
+
+Registration accepts `email`, `username`, and `password`. Login accepts `identifier` and `password`, where `identifier` can be an email or username.
 
 Projects:
 
@@ -229,78 +202,173 @@ Projects:
 - `GET /api/projects`
 - `GET /api/projects/{projectId}`
 - `DELETE /api/projects/{projectId}`
+- `GET /api/projects/{projectId}/members`
+- `POST /api/projects/{projectId}/members`
+- `DELETE /api/projects/{projectId}/members/{memberUserId}`
+- `GET /api/projects/{projectId}/audit`
 
-Specification versions:
+Specs:
 
 - `POST /api/projects/{projectId}/spec-versions`
 - `GET /api/projects/{projectId}/spec-versions`
 - `DELETE /api/spec-versions/{versionId}`
 
-Mock instances:
+Instances:
 
 - `POST /api/spec-versions/{versionId}/publish`
 - `GET /api/projects/{projectId}/instances`
 - `GET /api/instances/{instanceId}`
-- `POST /api/instances/{instanceId}/reset-state`
-- `POST /api/instances/{instanceId}/rotate-token`
 - `DELETE /api/instances/{instanceId}`
+- `POST /api/instances/{instanceId}/reset-state`
+- `GET /api/instances/{instanceId}/state`
+- `POST /api/instances/{instanceId}/rotate-token`
+- `POST /api/instances/{instanceId}/rotate-api-key`
 - `GET /api/instances/{instanceId}/logs`
 
 Runtime:
 
+- `GET /api/runtime/workers`
+- `POST /api/runtime/workers/heartbeat`
+- `GET /api/runtime/slots`
 - `ANY /mock/{publicToken}/**`
 
-## Deletion Rules
+Admin:
 
-Deletion is intentionally conservative:
+- `GET /api/admin/summary`
+- `GET /api/admin/users?query=`
+- `POST /api/admin/users/{userId}/disable`
+- `POST /api/admin/users/{userId}/enable`
+- `POST /api/admin/users/{userId}/make-admin`
+- `POST /api/admin/users/{userId}/revoke-admin`
+- `DELETE /api/admin/users/{userId}`
+- `GET /api/admin/projects?query=`
+- `DELETE /api/admin/projects/{projectId}`
+- `GET /api/admin/instances?limit=`
+- `DELETE /api/admin/instances/{instanceId}`
+- `GET /api/admin/logs?page=0&size=20&userId=`
+- `GET /api/admin/audit?page=0&size=20&actorId=`
+- `GET /api/admin/runtime/workers`
+- `GET /api/admin/runtime/slots`
 
-- deleting a project requires typing the exact project name in the UI;
-- deleting a project removes its specification versions, mock instances, runtime slots, and logs;
-- deleting a specification version removes related mock instances and their logs;
-- deleting a mock instance removes its runtime slot and logs;
-- all delete operations verify that the current user owns the project.
+## Admin Console
 
-## Testing
+The Admin section is visible only to users with `systemRole=ADMIN`. It is meant for platform-level operations, not project collaboration:
 
-Backend tests are executed during Docker image build:
+- Platform summary: users, projects, spec versions, instances, logs, unmatched requests, server errors, and average mock latency.
+- User management: search by email or username, see owned project count, promote/revoke admin role, disable/re-enable, and delete accounts.
+- Project overview: owner email, members, spec count, instance count, and update timestamps.
+- Instance overview: status, mode, route count, token preview, API key protection, and timestamps.
+- Runtime health: workers and warm slots across the runtime plane.
+- Global diagnostics: paginated request logs filterable by user/project access and paginated audit events with actor username/email.
+
+Admin APIs require a JWT with `ROLE_ADMIN`. Mock URLs remain public-by-link and are not admin-only.
+
+## Mock Runtime Controls
+
+Choose a response status:
 
 ```powershell
-docker compose build server
+Invoke-RestMethod "$mock/orders?__status=404"
 ```
 
-Frontend build:
+Add a delay:
 
 ```powershell
-cd ui
-npm run build
+Invoke-RestMethod "$mock/orders?__delay=500"
 ```
 
-Full stack smoke check:
+Use headers instead:
 
 ```powershell
-docker compose up -d --build
-Invoke-WebRequest -UseBasicParsing http://localhost:8081/actuator/health
-Invoke-WebRequest -UseBasicParsing http://localhost:5173
+Invoke-RestMethod "$mock/orders" `
+  -Headers @{ "X-Mock-Status" = "200"; "X-Mock-Delay-Ms" = "250" }
 ```
 
-## Git Commit And Push
+Use a protected mock instance:
 
-This folder is not initialized as a Git repository by default. To create the first commit and push it to a remote repository by URL:
+```powershell
+Invoke-RestMethod "$mock/orders" `
+  -Headers @{ "X-Mock-Api-Key" = "<key-shown-once>" }
+```
+
+Stateful CRUD:
+
+```powershell
+$order = Invoke-RestMethod "$mock/orders" `
+  -Method Post `
+  -ContentType "application/json" `
+  -Body '{"title":"First order","paid":false}'
+
+Invoke-RestMethod "$mock/orders/$($order.id)"
+Invoke-WebRequest "$mock/orders/$($order.id)" -Method Delete
+```
+
+## Demo Assets
+
+- `docs/demo-openapi.yaml` is a small OpenAPI contract for the console.
+- `docs/msaas-smoke.http` is an HTTP-client style checklist for auth, project creation, publish, mock calls, logs, state, and runtime workers.
+- `docs/smoke.ps1` runs an end-to-end PowerShell smoke test against a running local stack.
+
+Run the PowerShell smoke test:
 
 ```powershell
 cd D:\MSaaS
-git init
-git add .
-git commit -m "feat: implement backend-first MSaaS prototype"
-git branch -M main
-git remote add origin <PASTE_YOUR_REPOSITORY_URL_HERE>
-git push -u origin main
+.\docs\smoke.ps1
 ```
 
-Example with an HTTPS GitHub URL:
+## Testing
+
+Frontend:
 
 ```powershell
-git remote add origin https://github.com/your-username/msaas-console.git
+cd D:\MSaaS\ui
+npm run build
+```
+
+Backend unit tests:
+
+```powershell
+cd D:\MSaaS\server
+mvn test
+```
+
+Backend integration tests with Testcontainers:
+
+```powershell
+cd D:\MSaaS\server
+mvn -P integration-tests verify
+```
+
+Docker build smoke check:
+
+```powershell
+cd D:\MSaaS
+docker compose build server
+docker compose up -d --build
+```
+
+## Security Notes
+
+- Control API requests are always checked against `projectId + currentUserId`.
+- System admin access is separate from project roles and is granted only when the registered email matches `ADMIN_BOOTSTRAP_EMAIL`.
+- Disabled users cannot log in, but an admin cannot disable the currently logged-in admin account.
+- Admins cannot delete or revoke admin rights from their own active account.
+- Deleting a user also deletes projects owned by that user and removes the user from memberships in other projects.
+- `OWNER` can delete projects and manage members.
+- `MEMBER` can upload specs and manage instances.
+- `VIEWER` can inspect projects, logs, audit, and runtime status.
+- Public tokens are stored as SHA-256 hashes.
+- Full public URLs and mock API keys are one-time values. Rotate them if they are lost.
+- Request logs redact common secret fields such as `password`, `token`, `secret`, `authorization`, and `X-Mock-Api-Key`.
+
+## Git Commit And Push
+
+```powershell
+cd D:\MSaaS
+git add .
+git commit -m "feat: upgrade MSaaS toward production-ready v2"
+git branch -M main
+git remote add origin <PASTE_YOUR_REPOSITORY_URL_HERE>
 git push -u origin main
 ```
 
@@ -311,23 +379,19 @@ git remote set-url origin https://github.com/your-username/msaas-console.git
 git push -u origin main
 ```
 
-Recommended commit message:
+Recommended commit body:
 
 ```text
-feat: implement backend-first MSaaS prototype
+Add project roles, audit logs, hashed mock tokens, optional mock API keys,
+richer OpenAPI route matching, runtime state snapshots, runtime plane
+introspection, Swagger UI, integration-test scaffolding, demo assets,
+and a redesigned responsive React console.
 ```
 
-Longer commit body:
+## Roadmap
 
-```text
-Add Spring Boot control API, warm-slot mock runtime, MongoDB persistence,
-private projects, OpenAPI parsing, public mock links, request logs,
-delete flows, and a responsive React console with themes and ru/en UI.
-```
-
-## Current Limitations
-
-- OpenAPI REST is supported first; GraphQL is planned as a future extension.
-- Runtime slots currently run inside one server process.
-- Redis-based distributed state and multi-worker routing are not included yet.
-- WASM is planned as a future extension point for sandboxed response transformers.
+- Split `mock-runtime` into a separately deployable worker service.
+- Add Redis or Mongo-backed distributed runtime state.
+- Add custom response transformers and a sandboxed extension model.
+- Add GraphQL mocks.
+- Add billing/quotas, rate limits, and organization workspaces.

@@ -1,10 +1,14 @@
 package com.msaas.spec.contract;
 
+import java.util.LinkedHashMap;
+import java.util.Map;
+
 public class MockResponseDefinition {
     private int statusCode;
     private String contentType;
     private Object body;
     private long delayMs;
+    private Map<String, String> headers = new LinkedHashMap<>();
 
     public MockResponseDefinition() {
     }
@@ -46,5 +50,13 @@ public class MockResponseDefinition {
 
     public void setDelayMs(long delayMs) {
         this.delayMs = delayMs;
+    }
+
+    public Map<String, String> getHeaders() {
+        return headers;
+    }
+
+    public void setHeaders(Map<String, String> headers) {
+        this.headers = headers == null ? new LinkedHashMap<>() : headers;
     }
 }

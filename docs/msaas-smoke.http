@@ -1,0 +1,90 @@
+@baseUrl = http://localhost:8081
+@email = demo@example.com
+@password = password
+@jwt = paste-jwt-here
+@projectId = paste-project-id-here
+@versionId = paste-version-id-here
+@instanceId = paste-instance-id-here
+@mockUrl = paste-public-mock-url-shown-once-here
+@mockApiKey = paste-mock-api-key-if-required-here
+
+### Register
+POST {{baseUrl}}/api/auth/register
+Content-Type: application/json
+
+{
+  "email": "{{email}}",
+  "password": "{{password}}"
+}
+
+### Login
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{email}}",
+  "password": "{{password}}"
+}
+
+### Create project
+POST {{baseUrl}}/api/projects
+Authorization: Bearer {{jwt}}
+Content-Type: application/json
+
+{
+  "name": "Demo Orders",
+  "description": "Smoke-test project"
+}
+
+### List projects
+GET {{baseUrl}}/api/projects
+Authorization: Bearer {{jwt}}
+
+### Upload OpenAPI
+POST {{baseUrl}}/api/projects/{{projectId}}/spec-versions
+Authorization: Bearer {{jwt}}
+Content-Type: application/json
+
+{
+  "name": "demo-openapi.yaml",
+  "source": "Paste docs/demo-openapi.yaml content here as a JSON string"
+}
+
+### Publish stateful instance with optional API key
+POST {{baseUrl}}/api/spec-versions/{{versionId}}/publish
+Authorization: Bearer {{jwt}}
+Content-Type: application/json
+
+{
+  "mode": "STATEFUL",
+  "requireApiKey": true
+}
+
+### Call mock list with status and delay overrides
+GET {{mockUrl}}/orders?__status=200&__delay=150
+X-Mock-Api-Key: {{mockApiKey}}
+
+### Create stateful resource
+POST {{mockUrl}}/orders
+Content-Type: application/json
+X-Mock-Api-Key: {{mockApiKey}}
+
+{
+  "title": "First order",
+  "paid": false
+}
+
+### Inspect logs
+GET {{baseUrl}}/api/instances/{{instanceId}}/logs
+Authorization: Bearer {{jwt}}
+
+### Inspect state snapshot
+GET {{baseUrl}}/api/instances/{{instanceId}}/state
+Authorization: Bearer {{jwt}}
+
+### Runtime workers
+GET {{baseUrl}}/api/runtime/workers
+Authorization: Bearer {{jwt}}
+
+### Swagger UI
+GET {{baseUrl}}/swagger-ui.html

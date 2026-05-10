@@ -16,6 +16,10 @@ management:
       exposure:
         include: health,info
 
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+
 app:
   public-base-url: ${APP_PUBLIC_BASE_URL:http://localhost:8081}
   cors:
@@ -23,3 +27,5 @@ app:
   jwt:
     secret: ${JWT_SECRET:replace-this-development-secret-with-at-least-32-bytes}
     ttl-minutes: ${JWT_TTL_MINUTES:1440}
+  admin:
+    bootstrap-email: ${ADMIN_BOOTSTRAP_EMAIL:admin@example.com}

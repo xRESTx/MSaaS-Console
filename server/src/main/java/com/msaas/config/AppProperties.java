@@ -7,6 +7,7 @@ public class AppProperties {
     private String publicBaseUrl;
     private Cors cors = new Cors();
     private Jwt jwt = new Jwt();
+    private Admin admin = new Admin();
 
     public String getPublicBaseUrl() {
         return publicBaseUrl;
@@ -30,6 +31,14 @@ public class AppProperties {
 
     public void setJwt(Jwt jwt) {
         this.jwt = jwt;
+    }
+
+    public Admin getAdmin() {
+        return admin;
+    }
+
+    public void setAdmin(Admin admin) {
+        this.admin = admin;
     }
 
     public static class Cors {
@@ -62,6 +71,18 @@ public class AppProperties {
 
         public void setTtlMinutes(long ttlMinutes) {
             this.ttlMinutes = ttlMinutes;
+        }
+    }
+
+    public static class Admin {
+        private String bootstrapEmail;
+
+        public String getBootstrapEmail() {
+            return bootstrapEmail;
+        }
+
+        public void setBootstrapEmail(String bootstrapEmail) {
+            this.bootstrapEmail = bootstrapEmail;
         }
     }
 }

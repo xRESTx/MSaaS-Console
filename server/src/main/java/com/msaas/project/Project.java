@@ -5,6 +5,8 @@ import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
 
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 
 @Document("projects")
 public class Project {
@@ -16,6 +18,7 @@ public class Project {
 
     private String name;
     private String description;
+    private List<ProjectMember> members = new ArrayList<>();
     private Instant createdAt;
     private Instant updatedAt;
 
@@ -60,6 +63,14 @@ public class Project {
 
     public void setDescription(String description) {
         this.description = description;
+    }
+
+    public List<ProjectMember> getMembers() {
+        return members;
+    }
+
+    public void setMembers(List<ProjectMember> members) {
+        this.members = members == null ? new ArrayList<>() : members;
     }
 
     public Instant getCreatedAt() {

@@ -1,0 +1,116 @@
+openapi: 3.0.3
+info:
+  title: Demo Orders API
+  version: 1.0.0
+paths:
+  /orders:
+    get:
+      parameters:
+        - name: tenant
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Orders list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                    title:
+                      type: string
+                    paid:
+                      type: boolean
+        "404":
+          description: Tenant not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+    post:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                paid:
+                  type: boolean
+      responses:
+        "201":
+          description: Created order
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  title:
+                    type: string
+                  paid:
+                    type: boolean
+  /orders/{id}:
+    get:
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: One order
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  title:
+                    type: string
+                  paid:
+                    type: boolean
+    put:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                paid:
+                  type: boolean
+      responses:
+        "200":
+          description: Updated order
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  title:
+                    type: string
+                  paid:
+                    type: boolean
+    delete:
+      responses:
+        "204":
+          description: Deleted order

@@ -2,7 +2,9 @@ package com.msaas.instance;
 
 import com.msaas.spec.contract.NormalizedContract;
 import org.springframework.data.annotation.Id;
+import org.springframework.data.annotation.Transient;
 import org.springframework.data.mongodb.core.index.Indexed;
+import org.springframework.data.mongodb.core.mapping.Field;
 import org.springframework.data.mongodb.core.mapping.Document;
 
 import java.time.Instant;
@@ -18,27 +20,53 @@ public class MockInstance {
     @Indexed
     private String specVersionId;
 
-    @Indexed(unique = true)
-    private String publicToken;
+    @Indexed(unique = true, sparse = true)
+    private String publicTokenHash;
 
-    private String publicUrl;
+    @Field("publicToken")
+    private String legacyPublicTokenHash;
+
+    private String publicTokenPreview;
+    private boolean requireApiKey;
+    private String apiKeyHash;
+    private String apiKeyPreview;
     private InstanceMode mode;
     private InstanceStatus status;
     private NormalizedContract contract;
     private Instant createdAt;
     private Instant updatedAt;
 
+    @Transient
+    private String publicUrl;
+
+    @Transient
+    private String mockApiKey;
+
     public MockInstance() {
     }
 
-    public MockInstance(String projectId, String specVersionId, String publicToken, String publicUrl, InstanceMode mode, NormalizedContract contract) {
+    public MockInstance(
+            String projectId,
+            String specVersionId,
+            String publicTokenHash,
+            String publicTokenPreview,
+            InstanceMode mode,
+            NormalizedContract contract,
+            boolean requireApiKey,
+            String apiKeyHash,
+            String apiKeyPreview
+    ) {
         this.projectId = projectId;
         this.specVersionId = specVersionId;
-        this.publicToken = publicToken;
-        this.publicUrl = publicUrl;
+        this.publicTokenHash = publicTokenHash;
+        this.legacyPublicTokenHash = publicTokenHash;
+        this.publicTokenPreview = publicTokenPreview;
         this.mode = mode;
         this.status = InstanceStatus.RUNNING;
         this.contract = contract;
+        this.requireApiKey = requireApiKey;
+        this.apiKeyHash = apiKeyHash;
+        this.apiKeyPreview = apiKeyPreview;
         this.createdAt = Instant.now();
         this.updatedAt = this.createdAt;
     }
@@ -67,12 +95,53 @@ public class MockInstance {
         this.specVersionId = specVersionId;
     }
 
-    public String getPublicToken() {
-        return publicToken;
+    public String getPublicTokenHash() {
+        return publicTokenHash;
     }
 
-    public void setPublicToken(String publicToken) {
-        this.publicToken = publicToken;
+    public void setPublicTokenHash(String publicTokenHash) {
+        this.publicTokenHash = publicTokenHash;
+        this.legacyPublicTokenHash = publicTokenHash;
+    }
+
+    public String getLegacyPublicTokenHash() {
+        return legacyPublicTokenHash;
+    }
+
+    public void setLegacyPublicTokenHash(String legacyPublicTokenHash) {
+        this.legacyPublicTokenHash = legacyPublicTokenHash;
+    }
+
+    public String getPublicTokenPreview() {
+        return publicTokenPreview;
+    }
+
+    public void setPublicTokenPreview(String publicTokenPreview) {
+        this.publicTokenPreview = publicTokenPreview;
+    }
+
+    public boolean isRequireApiKey() {
+        return requireApiKey;
+    }
+
+    public void setRequireApiKey(boolean requireApiKey) {
+        this.requireApiKey = requireApiKey;
+    }
+
+    public String getApiKeyHash() {
+        return apiKeyHash;
+    }
+
+    public void setApiKeyHash(String apiKeyHash) {
+        this.apiKeyHash = apiKeyHash;
+    }
+
+    public String getApiKeyPreview() {
+        return apiKeyPreview;
+    }
+
+    public void setApiKeyPreview(String apiKeyPreview) {
+        this.apiKeyPreview = apiKeyPreview;
     }
 
     public String getPublicUrl() {
@@ -81,6 +150,14 @@ public class MockInstance {
 
     public void setPublicUrl(String publicUrl) {
         this.publicUrl = publicUrl;
+    }
+
+    public String getMockApiKey() {
+        return mockApiKey;
+    }
+
+    public void setMockApiKey(String mockApiKey) {
+        this.mockApiKey = mockApiKey;
     }
 
     public InstanceMode getMode() {
