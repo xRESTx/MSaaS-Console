@@ -8,6 +8,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -69,6 +70,52 @@ public class InstanceController {
         return InstanceView.from(instanceService.rotateApiKey(instanceId, user.id()));
     }
 
+    @PatchMapping("/instances/{instanceId}/settings")
+    public InstanceView updateSettings(
+            @AuthenticationPrincipal AuthenticatedUser user,
+            @PathVariable String instanceId,
+            @RequestBody InstanceSettingsRequest request
+    ) {
+        return InstanceView.from(instanceService.updateSettings(instanceId, user.id(), new InstanceService.InstanceSettings(
+                request.rateLimitEnabled(),
+                request.rateLimitRequests(),
+                request.rateLimitWindowSeconds()
+        )));
+    }
+
+    @GetMapping("/instances/{instanceId}/scenarios")
+    public List<ScenarioView> scenarios(@AuthenticationPrincipal AuthenticatedUser user, @PathVariable String instanceId) {
+        return instanceService.listScenarios(instanceId, user.id()).stream().map(ScenarioView::from).toList();
+    }
+
+    @PostMapping("/instances/{instanceId}/scenarios")
+    public ScenarioView createScenario(
+            @AuthenticationPrincipal AuthenticatedUser user,
+            @PathVariable String instanceId,
+            @RequestBody ScenarioRequest request
+    ) {
+        return ScenarioView.from(instanceService.createScenario(instanceId, user.id(), request.toServiceRequest()));
+    }
+
+    @PatchMapping("/instances/{instanceId}/scenarios/{scenarioId}")
+    public ScenarioView updateScenario(
+            @AuthenticationPrincipal AuthenticatedUser user,
+            @PathVariable String instanceId,
+            @PathVariable String scenarioId,
+            @RequestBody ScenarioRequest request
+    ) {
+        return ScenarioView.from(instanceService.updateScenario(instanceId, scenarioId, user.id(), request.toServiceRequest()));
+    }
+
+    @DeleteMapping("/instances/{instanceId}/scenarios/{scenarioId}")
+    public void deleteScenario(
+            @AuthenticationPrincipal AuthenticatedUser user,
+            @PathVariable String instanceId,
+            @PathVariable String scenarioId
+    ) {
+        instanceService.deleteScenario(instanceId, scenarioId, user.id());
+    }
+
     @GetMapping("/instances/{instanceId}/logs")
     public List<RequestLogView> logs(
             @AuthenticationPrincipal AuthenticatedUser user,
@@ -98,6 +145,10 @@ public class InstanceController {
             InstanceMode mode,
             InstanceStatus status,
             int routeCount,
+            boolean rateLimitEnabled,
+            int rateLimitRequests,
+            int rateLimitWindowSeconds,
+            int scenarioCount,
             Instant createdAt,
             Instant updatedAt
     ) {
@@ -115,8 +166,69 @@ public class InstanceController {
                     instance.getMode(),
                     instance.getStatus(),
                     routeCount,
+                    instance.isRateLimitEnabled(),
+                    instance.getRateLimitRequests(),
+                    instance.getRateLimitWindowSeconds(),
+                    instance.getScenarios().size(),
                     instance.getCreatedAt(),
                     instance.getUpdatedAt()
+            );
+        }
+    }
+
+    public record InstanceSettingsRequest(boolean rateLimitEnabled, int rateLimitRequests, int rateLimitWindowSeconds) {
+    }
+
+    public record ScenarioRequest(
+            String name,
+            boolean enabled,
+            int priority,
+            String operationId,
+            String method,
+            String pathTemplate,
+            Integer statusCode,
+            String contentType,
+            Object body,
+            Map<String, String> headers,
+            long delayMs
+    ) {
+        InstanceService.ScenarioRequest toServiceRequest() {
+            return new InstanceService.ScenarioRequest(name, enabled, priority, operationId, method, pathTemplate, statusCode, contentType, body, headers, delayMs);
+        }
+    }
+
+    public record ScenarioView(
+            String id,
+            String name,
+            boolean enabled,
+            int priority,
+            String operationId,
+            String method,
+            String pathTemplate,
+            Integer statusCode,
+            String contentType,
+            Object body,
+            Map<String, String> headers,
+            long delayMs,
+            Instant createdAt,
+            Instant updatedAt
+    ) {
+        static ScenarioView from(MockScenario scenario) {
+            return new ScenarioView(
+                    scenario.getId(),
+                    scenario.getName(),
+                    scenario.isEnabled(),
+                    scenario.getPriority(),
+                    scenario.getOperationId(),
+                    scenario.getMethod(),
+                    scenario.getPathTemplate(),
+                    scenario.getStatusCode(),
+                    scenario.getContentType(),
+                    scenario.getBody(),
+                    scenario.getHeaders(),
+                    scenario.getDelayMs(),
+                    scenario.getCreatedAt(),
+                    scenario.getUpdatedAt()
             );
         }
     }

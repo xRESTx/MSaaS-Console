@@ -2,9 +2,12 @@ package com.msaas.runtime;
 
 import com.msaas.instance.InstanceMode;
 import com.msaas.instance.MockInstance;
+import com.msaas.instance.MockScenario;
 import com.msaas.spec.contract.NormalizedContract;
 
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -19,6 +22,10 @@ public class RuntimeSlot {
     private final String apiKeyHash;
     private final InstanceMode mode;
     private final NormalizedContract contract;
+    private final boolean rateLimitEnabled;
+    private final int rateLimitRequests;
+    private final int rateLimitWindowSeconds;
+    private final List<MockScenario> scenarios;
     private final Instant loadedAt;
     private final ConcurrentMap<String, ConcurrentMap<String, Object>> state = new ConcurrentHashMap<>();
 
@@ -31,6 +38,10 @@ public class RuntimeSlot {
         this.apiKeyHash = instance.getApiKeyHash();
         this.mode = instance.getMode();
         this.contract = instance.getContract();
+        this.rateLimitEnabled = instance.isRateLimitEnabled();
+        this.rateLimitRequests = instance.getRateLimitRequests();
+        this.rateLimitWindowSeconds = instance.getRateLimitWindowSeconds();
+        this.scenarios = new ArrayList<>(instance.getScenarios());
         this.loadedAt = Instant.now();
     }
 
@@ -64,6 +75,22 @@ public class RuntimeSlot {
 
     public NormalizedContract getContract() {
         return contract;
+    }
+
+    public boolean isRateLimitEnabled() {
+        return rateLimitEnabled;
+    }
+
+    public int getRateLimitRequests() {
+        return rateLimitRequests;
+    }
+
+    public int getRateLimitWindowSeconds() {
+        return rateLimitWindowSeconds;
+    }
+
+    public List<MockScenario> getScenarios() {
+        return scenarios;
     }
 
     public Instant getLoadedAt() {

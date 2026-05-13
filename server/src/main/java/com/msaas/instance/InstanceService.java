@@ -12,8 +12,11 @@ import com.msaas.spec.SpecVersion;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 @Service
 public class InstanceService {
@@ -161,6 +164,91 @@ public class InstanceService {
         return saved;
     }
 
+    public MockInstance updateSettings(String instanceId, String actorId, InstanceSettings settings) {
+        MockInstance instance = requireWritableInstance(instanceId, actorId);
+        instance.setRateLimitEnabled(settings.rateLimitEnabled());
+        instance.setRateLimitRequests(settings.rateLimitRequests());
+        instance.setRateLimitWindowSeconds(settings.rateLimitWindowSeconds());
+        instance.setUpdatedAt(Instant.now());
+        MockInstance saved = instanceRepository.save(instance);
+        runtimeRegistry.register(saved);
+        auditService.record(instance.getProjectId(), actorId, "INSTANCE_SETTINGS_UPDATED", "mockInstance", instance.getId(), "Mock instance settings updated", Map.of(
+                "rateLimitEnabled", saved.isRateLimitEnabled(),
+                "rateLimitRequests", saved.getRateLimitRequests(),
+                "rateLimitWindowSeconds", saved.getRateLimitWindowSeconds()
+        ));
+        return saved;
+    }
+
+    public List<MockScenario> listScenarios(String instanceId, String actorId) {
+        MockInstance instance = requireAccessibleInstance(instanceId, actorId);
+        return orderedScenarios(instance);
+    }
+
+    public MockScenario createScenario(String instanceId, String actorId, ScenarioRequest request) {
+        MockInstance instance = requireWritableInstance(instanceId, actorId);
+        MockScenario scenario = scenarioFromRequest(new MockScenario(), request);
+        scenario.setId(UUID.randomUUID().toString());
+        scenario.setCreatedAt(Instant.now());
+        scenario.setUpdatedAt(scenario.getCreatedAt());
+        List<MockScenario> scenarios = new ArrayList<>(instance.getScenarios());
+        scenarios.add(scenario);
+        saveScenarios(instance, actorId, scenarios, "SCENARIO_CREATED", "Mock scenario created");
+        return scenario;
+    }
+
+    public MockScenario updateScenario(String instanceId, String scenarioId, String actorId, ScenarioRequest request) {
+        MockInstance instance = requireWritableInstance(instanceId, actorId);
+        List<MockScenario> scenarios = new ArrayList<>(instance.getScenarios());
+        MockScenario scenario = scenarios.stream()
+                .filter(item -> item.getId().equals(scenarioId))
+                .findFirst()
+                .orElseThrow(() -> ApiException.notFound("Scenario not found"));
+        scenarioFromRequest(scenario, request);
+        scenario.setUpdatedAt(Instant.now());
+        saveScenarios(instance, actorId, scenarios, "SCENARIO_UPDATED", "Mock scenario updated");
+        return scenario;
+    }
+
+    public void deleteScenario(String instanceId, String scenarioId, String actorId) {
+        MockInstance instance = requireWritableInstance(instanceId, actorId);
+        List<MockScenario> scenarios = new ArrayList<>(instance.getScenarios());
+        boolean removed = scenarios.removeIf(item -> item.getId().equals(scenarioId));
+        if (!removed) {
+            throw ApiException.notFound("Scenario not found");
+        }
+        saveScenarios(instance, actorId, scenarios, "SCENARIO_DELETED", "Mock scenario deleted");
+    }
+
+    private List<MockScenario> orderedScenarios(MockInstance instance) {
+        return instance.getScenarios().stream()
+                .sorted(Comparator.comparingInt(MockScenario::getPriority).reversed())
+                .toList();
+    }
+
+    private MockScenario scenarioFromRequest(MockScenario scenario, ScenarioRequest request) {
+        scenario.setName(request.name());
+        scenario.setEnabled(request.enabled());
+        scenario.setPriority(request.priority());
+        scenario.setOperationId(request.operationId());
+        scenario.setMethod(request.method());
+        scenario.setPathTemplate(request.pathTemplate());
+        scenario.setStatusCode(request.statusCode());
+        scenario.setContentType(request.contentType());
+        scenario.setBody(request.body());
+        scenario.setHeaders(request.headers());
+        scenario.setDelayMs(request.delayMs());
+        return scenario;
+    }
+
+    private void saveScenarios(MockInstance instance, String actorId, List<MockScenario> scenarios, String action, String message) {
+        instance.setScenarios(scenarios);
+        instance.setUpdatedAt(Instant.now());
+        MockInstance saved = instanceRepository.save(instance);
+        runtimeRegistry.register(saved);
+        auditService.record(saved.getProjectId(), actorId, action, "mockScenario", saved.getId(), message);
+    }
+
     private IssuedSecret uniquePublicToken() {
         IssuedSecret token;
         do {
@@ -183,5 +271,23 @@ public class InstanceService {
     }
 
     private record IssuedSecret(String raw, String hash, String preview) {
+    }
+
+    public record InstanceSettings(boolean rateLimitEnabled, int rateLimitRequests, int rateLimitWindowSeconds) {
+    }
+
+    public record ScenarioRequest(
+            String name,
+            boolean enabled,
+            int priority,
+            String operationId,
+            String method,
+            String pathTemplate,
+            Integer statusCode,
+            String contentType,
+            Object body,
+            Map<String, String> headers,
+            long delayMs
+    ) {
     }
 }

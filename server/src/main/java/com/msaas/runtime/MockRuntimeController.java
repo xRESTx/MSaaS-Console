@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.msaas.instance.InstanceMode;
+import com.msaas.instance.MockScenario;
 import com.msaas.log.LogRedactor;
 import com.msaas.log.RequestLog;
 import com.msaas.log.RequestLogRepository;
@@ -43,6 +44,8 @@ public class MockRuntimeController {
     private final ObjectMapper objectMapper;
     private final SecretHashService secretHashService;
     private final LogRedactor logRedactor;
+    private final MockRateLimiter rateLimiter;
+    private final TemplateRenderer templateRenderer;
 
     public MockRuntimeController(
             MockRuntimeRegistry registry,
@@ -50,7 +53,9 @@ public class MockRuntimeController {
             RequestLogRepository requestLogRepository,
             ObjectMapper objectMapper,
             SecretHashService secretHashService,
-            LogRedactor logRedactor
+            LogRedactor logRedactor,
+            MockRateLimiter rateLimiter,
+            TemplateRenderer templateRenderer
     ) {
         this.registry = registry;
         this.routeMatcher = routeMatcher;
@@ -58,6 +63,8 @@ public class MockRuntimeController {
         this.objectMapper = objectMapper;
         this.secretHashService = secretHashService;
         this.logRedactor = logRedactor;
+        this.rateLimiter = rateLimiter;
+        this.templateRenderer = templateRenderer;
     }
 
     @RequestMapping("/mock/{token}/**")
@@ -87,21 +94,40 @@ public class MockRuntimeController {
                 return response;
             }
 
+            MockRateLimiter.RateLimitResult rateLimit = rateLimiter.tryAcquire(slot, token, clientIp(request));
+            if (!rateLimit.allowed()) {
+                response = ResponseEntity.status(429)
+                        .header("Retry-After", String.valueOf(rateLimit.retryAfterSeconds()))
+                        .body(Map.of("error", "Rate limit exceeded", "retryAfterSeconds", rateLimit.retryAfterSeconds()));
+                log.setMatched(false);
+                log.setError("Rate limit exceeded");
+                return response;
+            }
+
+            ResponseDirective directive = responseDirective(request);
+            Map<String, List<String>> queryParameters = queryParameters(request);
+            Map<String, String> headers = headers(request);
             Optional<RouteMatch> match = routeMatcher.match(
                     slot.getContract(),
                     request.getMethod(),
                     mockPath,
-                    queryParameters(request),
-                    headers(request),
+                    queryParameters,
+                    headers,
                     requestBody
             );
             if (match.isEmpty()) {
-                response = ResponseEntity.status(404).body(Map.of("error", "No matching route", "path", mockPath));
+                Map<String, Object> body = new LinkedHashMap<>();
+                body.put("error", "No matching route");
+                body.put("path", mockPath);
+                if (directive.debug()) {
+                    body.put("hints", routeMatcher.mismatchHints(slot.getContract(), request.getMethod(), mockPath, queryParameters, headers, requestBody));
+                }
+                response = ResponseEntity.status(404).body(body);
                 log.setMatched(false);
                 log.setError("No matching route");
             } else {
                 log.setMatched(true);
-                response = respond(slot, match.get(), request.getMethod(), requestBody, responseDirective(request));
+                response = respond(slot, match.get(), request.getMethod(), requestBody, queryParameters, headers, directive);
             }
             return response;
         } finally {
@@ -119,17 +145,72 @@ public class MockRuntimeController {
         return secretHashService.matches(request.getHeader("X-Mock-Api-Key"), slot.getApiKeyHash());
     }
 
-    private ResponseEntity<Object> respond(RuntimeSlot slot, RouteMatch match, String method, String requestBody, ResponseDirective directive) {
+    private ResponseEntity<Object> respond(
+            RuntimeSlot slot,
+            RouteMatch match,
+            String method,
+            String requestBody,
+            Map<String, List<String>> queryParameters,
+            Map<String, String> headers,
+            ResponseDirective directive
+    ) {
+        Optional<ResponseEntity<Object>> scenario = scenarioResponse(slot, match, requestBody, queryParameters, headers, directive);
+        if (scenario.isPresent()) {
+            return scenario.get();
+        }
         if (slot.getMode() == InstanceMode.STATEFUL) {
-            Optional<ResponseEntity<Object>> stateful = statefulResponse(slot, match, method, requestBody, directive);
+            Optional<ResponseEntity<Object>> stateful = statefulResponse(slot, match, method, requestBody, queryParameters, headers, directive);
             if (stateful.isPresent()) {
                 return stateful.get();
             }
         }
-        return responseFromDefinition(selectResponse(match.route(), directive.statusCode()), directive);
+        return responseFromDefinition(selectResponse(match.route(), directive), match, requestBody, queryParameters, headers, directive);
     }
 
-    private Optional<ResponseEntity<Object>> statefulResponse(RuntimeSlot slot, RouteMatch match, String method, String requestBody, ResponseDirective directive) {
+    private Optional<ResponseEntity<Object>> scenarioResponse(
+            RuntimeSlot slot,
+            RouteMatch match,
+            String requestBody,
+            Map<String, List<String>> queryParameters,
+            Map<String, String> headers,
+            ResponseDirective directive
+    ) {
+        return slot.getScenarios().stream()
+                .filter(MockScenario::isEnabled)
+                .filter(scenario -> scenarioMatches(scenario, match))
+                .sorted(java.util.Comparator.comparingInt(MockScenario::getPriority).reversed())
+                .findFirst()
+                .map(scenario -> {
+                    Object body = templateRenderer.render(scenario.getBody(), match.variables(), queryParameters, headers, requestBody);
+                    long delayMs = directive.delayMs().orElse(scenario.getDelayMs());
+                    delay(delayMs);
+                    HttpHeaders responseHeaders = new HttpHeaders();
+                    responseHeaders.setContentType(parseMediaType(scenario.getContentType()));
+                    scenario.getHeaders().forEach((name, value) -> responseHeaders.set(name, String.valueOf(templateRenderer.render(value, match.variables(), queryParameters, headers, requestBody))));
+                    int status = directive.statusCode().orElse(scenario.getStatusCode() == null ? match.route().getDefaultStatusCode() : scenario.getStatusCode());
+                    return ResponseEntity.status(HttpStatusCode.valueOf(status)).headers(responseHeaders).body(body);
+                });
+    }
+
+    private boolean scenarioMatches(MockScenario scenario, RouteMatch match) {
+        MockRoute route = match.route();
+        if (scenario.getOperationId() != null && route.getOperationId() != null) {
+            return scenario.getOperationId().equals(route.getOperationId());
+        }
+        boolean methodMatches = scenario.getMethod() == null || scenario.getMethod().equalsIgnoreCase(route.getMethod());
+        boolean pathMatches = scenario.getPathTemplate() == null || scenario.getPathTemplate().equals(route.getPathTemplate());
+        return methodMatches && pathMatches;
+    }
+
+    private Optional<ResponseEntity<Object>> statefulResponse(
+            RuntimeSlot slot,
+            RouteMatch match,
+            String method,
+            String requestBody,
+            Map<String, List<String>> queryParameters,
+            Map<String, String> headers,
+            ResponseDirective directive
+    ) {
         MockRoute route = match.route();
         String upperMethod = method.toUpperCase(Locale.ROOT);
         String collectionKey = collectionKey(route.getPathTemplate());
@@ -141,26 +222,26 @@ public class MockRuntimeController {
             String id = String.valueOf(item.getOrDefault("id", UUID.randomUUID().toString()));
             item.putIfAbsent("id", id);
             collection.put(id, item);
-            return Optional.of(responseWithBody(route, directive.statusCode().orElse(201), item, directive));
+            return Optional.of(responseWithBody(route, directive.statusCode().orElse(201), item, match, requestBody, queryParameters, headers, directive));
         }
 
         if ("GET".equals(upperMethod) && maybeId.isPresent()) {
             Object item = collection.get(maybeId.get());
             if (item != null) {
-                return Optional.of(responseWithBody(route, directive.statusCode().orElse(200), item, directive));
+                return Optional.of(responseWithBody(route, directive.statusCode().orElse(200), item, match, requestBody, queryParameters, headers, directive));
             }
             return Optional.empty();
         }
 
         if ("GET".equals(upperMethod) && maybeId.isEmpty() && !collection.isEmpty()) {
-            return Optional.of(responseWithBody(route, directive.statusCode().orElse(200), new ArrayList<>(collection.values()), directive));
+            return Optional.of(responseWithBody(route, directive.statusCode().orElse(200), new ArrayList<>(collection.values()), match, requestBody, queryParameters, headers, directive));
         }
 
         if (("PUT".equals(upperMethod) || "PATCH".equals(upperMethod)) && maybeId.isPresent()) {
             Map<String, Object> item = objectBodyOrDefault(requestBody, route.defaultResponse().getBody());
             item.putIfAbsent("id", maybeId.get());
             collection.put(maybeId.get(), item);
-            return Optional.of(responseWithBody(route, directive.statusCode().orElse(200), item, directive));
+            return Optional.of(responseWithBody(route, directive.statusCode().orElse(200), item, match, requestBody, queryParameters, headers, directive));
         }
 
         if ("DELETE".equals(upperMethod) && maybeId.isPresent()) {
@@ -170,31 +251,96 @@ public class MockRuntimeController {
                 delay(effectiveDelayMs(definition, directive));
                 return Optional.of(ResponseEntity.status(204).build());
             }
-            return Optional.of(responseFromDefinition(definition, directive));
+            return Optional.of(responseFromDefinition(definition, match, requestBody, queryParameters, headers, directive));
         }
 
         return Optional.empty();
     }
 
-    private ResponseEntity<Object> responseWithBody(MockRoute route, int preferredStatus, Object body, ResponseDirective directive) {
+    private ResponseEntity<Object> responseWithBody(
+            MockRoute route,
+            int preferredStatus,
+            Object body,
+            RouteMatch match,
+            String requestBody,
+            Map<String, List<String>> queryParameters,
+            Map<String, String> requestHeaders,
+            ResponseDirective directive
+    ) {
         MockResponseDefinition definition = preferredResponse(route, preferredStatus);
         delay(effectiveDelayMs(definition, directive));
-        HttpHeaders headers = headers(definition);
+        HttpHeaders responseHeaders = headers(definition);
         return ResponseEntity.status(HttpStatusCode.valueOf(definition.getStatusCode()))
-                .headers(headers)
-                .body(body);
+                .headers(responseHeaders)
+                .body(templateRenderer.render(body, match.variables(), queryParameters, requestHeaders, requestBody));
     }
 
-    private ResponseEntity<Object> responseFromDefinition(MockResponseDefinition definition, ResponseDirective directive) {
+    private ResponseEntity<Object> responseFromDefinition(
+            MockResponseDefinition definition,
+            RouteMatch match,
+            String requestBody,
+            Map<String, List<String>> queryParameters,
+            Map<String, String> requestHeaders,
+            ResponseDirective directive
+    ) {
         delay(effectiveDelayMs(definition, directive));
-        HttpHeaders headers = headers(definition);
+        HttpHeaders responseHeaders = headers(definition);
         return ResponseEntity.status(HttpStatusCode.valueOf(definition.getStatusCode()))
-                .headers(headers)
-                .body(definition.getBody());
+                .headers(responseHeaders)
+                .body(templateRenderer.render(definition.getBody(), match.variables(), queryParameters, requestHeaders, requestBody));
     }
 
-    private MockResponseDefinition selectResponse(MockRoute route, Optional<Integer> statusCode) {
-        return statusCode.map(status -> preferredResponse(route, status)).orElseGet(route::defaultResponse);
+    private MockResponseDefinition selectResponse(MockRoute route, ResponseDirective directive) {
+        MockResponseDefinition definition = directive.statusCode().map(status -> preferredResponse(route, status)).orElseGet(route::defaultResponse);
+        definition = selectContent(definition, directive.acceptHeader());
+        if (directive.exampleName().isPresent()) {
+            Object example = definition.getExamples().get(directive.exampleName().get());
+            if (example != null) {
+                return definition.withBody(example);
+            }
+        }
+        return definition;
+    }
+
+    private MockResponseDefinition selectContent(MockResponseDefinition definition, Optional<String> acceptHeader) {
+        Map<String, MockResponseDefinition.ResponseContent> contents = definition.getContents();
+        if (contents.size() <= 1 || acceptHeader.isEmpty()) {
+            return definition;
+        }
+        try {
+            List<MediaType> accepted = MediaType.parseMediaTypes(acceptHeader.get());
+            accepted.sort(this::compareAcceptedMediaTypes);
+            for (MediaType accept : accepted) {
+                for (Map.Entry<String, MockResponseDefinition.ResponseContent> entry : contents.entrySet()) {
+                    MediaType candidate = parseMediaType(entry.getKey());
+                    if (accept.includes(candidate) || accept.isCompatibleWith(candidate)) {
+                        return definition.withContent(entry.getKey(), entry.getValue());
+                    }
+                }
+            }
+        } catch (RuntimeException ignored) {
+            return definition;
+        }
+        return definition;
+    }
+
+    private int compareAcceptedMediaTypes(MediaType left, MediaType right) {
+        int quality = Double.compare(right.getQualityValue(), left.getQualityValue());
+        if (quality != 0) {
+            return quality;
+        }
+        return Integer.compare(mediaTypeSpecificity(right), mediaTypeSpecificity(left));
+    }
+
+    private int mediaTypeSpecificity(MediaType mediaType) {
+        int score = 0;
+        if (!mediaType.isWildcardType()) {
+            score += 2;
+        }
+        if (!mediaType.isWildcardSubtype()) {
+            score += 1;
+        }
+        return score;
     }
 
     private MockResponseDefinition preferredResponse(MockRoute route, int preferredStatus) {
@@ -292,7 +438,19 @@ public class MockRuntimeController {
                 .filter(value -> value >= 100 && value <= 599);
         Optional<Long> delay = parseLong(firstPresent(request.getParameter("__delay"), request.getHeader("X-Mock-Delay-Ms")))
                 .map(value -> Math.max(0, Math.min(value, MAX_REQUEST_DELAY_MS)));
-        return new ResponseDirective(status, delay);
+        Optional<String> example = Optional.ofNullable(firstPresent(request.getParameter("__example"), request.getHeader("X-Mock-Example")))
+                .filter(value -> !value.isBlank());
+        boolean debug = "true".equalsIgnoreCase(firstPresent(request.getParameter("__debug"), request.getHeader("X-Mock-Debug")));
+        Optional<String> acceptHeader = Optional.ofNullable(request.getHeader("Accept")).filter(value -> !value.isBlank());
+        return new ResponseDirective(status, delay, example, debug, acceptHeader);
+    }
+
+    private String clientIp(HttpServletRequest request) {
+        String forwarded = request.getHeader("X-Forwarded-For");
+        if (forwarded != null && !forwarded.isBlank()) {
+            return forwarded.split(",")[0].trim();
+        }
+        return request.getRemoteAddr() == null ? "unknown" : request.getRemoteAddr();
     }
 
     private long effectiveDelayMs(MockResponseDefinition definition, ResponseDirective directive) {
@@ -347,6 +505,12 @@ public class MockRuntimeController {
         }
     }
 
-    private record ResponseDirective(Optional<Integer> statusCode, Optional<Long> delayMs) {
+    private record ResponseDirective(
+            Optional<Integer> statusCode,
+            Optional<Long> delayMs,
+            Optional<String> exampleName,
+            boolean debug,
+            Optional<String> acceptHeader
+    ) {
     }
 }

@@ -76,6 +76,13 @@ public class SpecService {
         return version;
     }
 
+    public SpecVersion requireAccessibleVersion(String versionId, String actorId) {
+        SpecVersion version = specVersionRepository.findById(versionId)
+                .orElseThrow(() -> ApiException.notFound("Specification version not found"));
+        projectService.requireProjectAccess(version.getProjectId(), actorId);
+        return version;
+    }
+
     public SpecVersion requireValidWritableVersion(String versionId, String actorId) {
         SpecVersion version = requireWritableVersion(versionId, actorId);
         if (version.getStatus() != ValidationStatus.VALID || version.getNormalizedContract() == null) {

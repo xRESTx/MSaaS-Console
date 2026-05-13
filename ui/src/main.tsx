@@ -75,6 +75,22 @@ type SpecVersion = {
   routeCount: number;
 };
 
+type ContractRoute = {
+  method: string;
+  pathTemplate: string;
+  operationId: string | null;
+  requiredQueryParameters: string[];
+  requiredHeaderParameters: string[];
+  requestBodyRequired: boolean;
+  responses: ContractResponse[];
+};
+
+type ContractResponse = {
+  statusCode: number;
+  contentType: string;
+  examples: string[];
+};
+
 type MockInstance = {
   id: string;
   projectId: string;
@@ -87,6 +103,27 @@ type MockInstance = {
   mode: InstanceMode;
   status: string;
   routeCount: number;
+  rateLimitEnabled: boolean;
+  rateLimitRequests: number;
+  rateLimitWindowSeconds: number;
+  scenarioCount: number;
+};
+
+type MockScenario = {
+  id: string;
+  name: string;
+  enabled: boolean;
+  priority: number;
+  operationId: string | null;
+  method: string | null;
+  pathTemplate: string | null;
+  statusCode: number | null;
+  contentType: string;
+  body: unknown;
+  headers: Record<string, string>;
+  delayMs: number;
+  createdAt: string;
+  updatedAt: string;
 };
 
 type RequestLog = {
@@ -839,6 +876,8 @@ function App() {
   const [specSource, setSpecSource] = useState(sampleSpec);
   const [specPage, setSpecPage] = useState(0);
   const [specVersions, setSpecVersions] = useState<SpecVersion[]>([]);
+  const [routeExplorerVersionId, setRouteExplorerVersionId] = useState("");
+  const [contractRoutes, setContractRoutes] = useState<ContractRoute[]>([]);
   const [instances, setInstances] = useState<MockInstance[]>([]);
   const [selectedInstanceId, setSelectedInstanceId] = useState("");
   const [instancePage, setInstancePage] = useState(0);
@@ -851,6 +890,21 @@ function App() {
   const [mockPath, setMockPath] = useState("/orders?__status=200");
   const [mockBody, setMockBody] = useState('{"title":"Test order","paid":false}');
   const [mockResponse, setMockResponse] = useState("");
+  const [rateLimitEnabled, setRateLimitEnabled] = useState(true);
+  const [rateLimitRequests, setRateLimitRequests] = useState(120);
+  const [rateLimitWindowSeconds, setRateLimitWindowSeconds] = useState(60);
+  const [scenarios, setScenarios] = useState<MockScenario[]>([]);
+  const [editingScenarioId, setEditingScenarioId] = useState("");
+  const [scenarioName, setScenarioName] = useState("Slow 500 example");
+  const [scenarioEnabled, setScenarioEnabled] = useState(true);
+  const [scenarioPriority, setScenarioPriority] = useState(100);
+  const [scenarioOperationId, setScenarioOperationId] = useState("");
+  const [scenarioMethod, setScenarioMethod] = useState("GET");
+  const [scenarioPathTemplate, setScenarioPathTemplate] = useState("/orders");
+  const [scenarioStatusCode, setScenarioStatusCode] = useState(200);
+  const [scenarioContentType, setScenarioContentType] = useState("application/json");
+  const [scenarioDelayMs, setScenarioDelayMs] = useState(0);
+  const [scenarioBody, setScenarioBody] = useState('{"id":"{{path.id}}","request":"{{uuid}}","createdAt":"{{now}}"}');
   const [logs, setLogs] = useState<RequestLog[]>([]);
   const [logMethodFilter, setLogMethodFilter] = useState("ALL");
   const [logMatchFilter, setLogMatchFilter] = useState("ALL");
@@ -1002,8 +1056,32 @@ function App() {
   useEffect(() => {
     if (selectedInstance) {
       setMockApiKeyInput(issuedApiKeys[selectedInstance.id] ?? "");
+      setRateLimitEnabled(selectedInstance.rateLimitEnabled);
+      setRateLimitRequests(selectedInstance.rateLimitRequests);
+      setRateLimitWindowSeconds(selectedInstance.rateLimitWindowSeconds);
+      void refreshScenarios(selectedInstance.id);
+    } else {
+      setScenarios([]);
     }
   }, [selectedInstanceId, issuedApiKeys]);
+
+  useEffect(() => {
+    if (specVersions.length === 0) {
+      setRouteExplorerVersionId("");
+      return;
+    }
+    if (!routeExplorerVersionId || !specVersions.some((version) => version.id === routeExplorerVersionId)) {
+      setRouteExplorerVersionId(specVersions[0].id);
+    }
+  }, [specVersions, routeExplorerVersionId]);
+
+  useEffect(() => {
+    if (routeExplorerVersionId) {
+      void refreshContractRoutes(routeExplorerVersionId);
+    } else {
+      setContractRoutes([]);
+    }
+  }, [routeExplorerVersionId]);
 
   useEffect(() => {
     setAccountUsername(user?.username ?? "");
@@ -1383,6 +1461,98 @@ function App() {
     await run("logs", async () => {
       setLogs(await api<RequestLog[]>(`/api/instances/${selectedInstance.id}/logs`, { headers: authHeaders }));
     });
+  }
+
+  async function refreshContractRoutes(versionId: string) {
+    await run("contract-routes", async () => {
+      setContractRoutes(await api<ContractRoute[]>(`/api/spec-versions/${versionId}/routes`, { headers: authHeaders }));
+    });
+  }
+
+  async function refreshScenarios(instanceId: string) {
+    await run("scenarios", async () => {
+      setScenarios(await api<MockScenario[]>(`/api/instances/${instanceId}/scenarios`, { headers: authHeaders }));
+    });
+  }
+
+  async function saveInstanceSettings() {
+    if (!selectedInstance) return;
+    await run("instance-settings", async () => {
+      const updated = await api<MockInstance>(`/api/instances/${selectedInstance.id}/settings`, {
+        method: "PATCH",
+        headers: authHeaders,
+        body: JSON.stringify({
+          rateLimitEnabled,
+          rateLimitRequests,
+          rateLimitWindowSeconds
+        })
+      });
+      setInstances((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+      notify(lang === "ru" ? "Настройки инстанса сохранены" : "Instance settings saved");
+      await refreshRuntimePlane();
+    });
+  }
+
+  async function saveScenario() {
+    if (!selectedInstance) return;
+    const payload = {
+      name: scenarioName,
+      enabled: scenarioEnabled,
+      priority: scenarioPriority,
+      operationId: scenarioOperationId || null,
+      method: scenarioMethod || null,
+      pathTemplate: scenarioPathTemplate || null,
+      statusCode: scenarioStatusCode || null,
+      contentType: scenarioContentType,
+      body: parseJsonOrText(scenarioBody),
+      headers: {},
+      delayMs: scenarioDelayMs
+    };
+    await run("scenario-save", async () => {
+      const path = editingScenarioId
+        ? `/api/instances/${selectedInstance.id}/scenarios/${editingScenarioId}`
+        : `/api/instances/${selectedInstance.id}/scenarios`;
+      const saved = await api<MockScenario>(path, {
+        method: editingScenarioId ? "PATCH" : "POST",
+        headers: authHeaders,
+        body: JSON.stringify(payload)
+      });
+      setScenarios((current) => editingScenarioId
+        ? current.map((item) => (item.id === saved.id ? saved : item))
+        : [saved, ...current]);
+      setEditingScenarioId("");
+      setScenarioName("Slow 500 example");
+      setScenarioEnabled(true);
+      setScenarioPriority(100);
+      notify(lang === "ru" ? "Сценарий сохранён" : "Scenario saved");
+      if (selectedProjectId) await refreshProjectDetails(selectedProjectId);
+    });
+  }
+
+  async function deleteScenario(scenarioId: string) {
+    if (!selectedInstance) return;
+    await run(`scenario-delete-${scenarioId}`, async () => {
+      await api<void>(`/api/instances/${selectedInstance.id}/scenarios/${scenarioId}`, {
+        method: "DELETE",
+        headers: authHeaders
+      });
+      setScenarios((current) => current.filter((scenario) => scenario.id !== scenarioId));
+      if (selectedProjectId) await refreshProjectDetails(selectedProjectId);
+    });
+  }
+
+  function editScenario(scenario: MockScenario) {
+    setEditingScenarioId(scenario.id);
+    setScenarioName(scenario.name);
+    setScenarioEnabled(scenario.enabled);
+    setScenarioPriority(scenario.priority);
+    setScenarioOperationId(scenario.operationId ?? "");
+    setScenarioMethod(scenario.method ?? "GET");
+    setScenarioPathTemplate(scenario.pathTemplate ?? "/orders");
+    setScenarioStatusCode(scenario.statusCode ?? 200);
+    setScenarioContentType(scenario.contentType ?? "application/json");
+    setScenarioDelayMs(scenario.delayMs);
+    setScenarioBody(formatBody(scenario.body));
   }
 
   async function addMember() {
@@ -2167,6 +2337,31 @@ function App() {
             ))}
             {!busy.details && specVersions.length === 0 && <EmptyState icon={<FileJson size={28} />} text={t.emptySpecs} />}
           </div>
+          <div className="route-explorer">
+            <div className="surface-heading compact-heading">
+              <div>
+                <p className="eyebrow">Route explorer</p>
+                <h2>{lang === "ru" ? "Маршруты контракта" : "Contract routes"}</h2>
+              </div>
+              <select value={routeExplorerVersionId} onChange={(event) => setRouteExplorerVersionId(event.target.value)}>
+                {specVersions.map((version) => (
+                  <option value={version.id} key={version.id}>v{version.versionNumber}: {version.name}</option>
+                ))}
+              </select>
+            </div>
+            <div className="stack-list panel-scroll route-list">
+              {contractRoutes.map((route) => (
+                <div className="route-card" key={`${route.method}-${route.pathTemplate}`}>
+                  <span className={cx("method-badge", route.method.toLowerCase())}>{route.method}</span>
+                  <strong>{route.pathTemplate}</strong>
+                  <small>{route.operationId || "operation"} · {route.requestBodyRequired ? "body required" : "body optional"}</small>
+                  <small>query: {route.requiredQueryParameters.join(", ") || "-"} · headers: {route.requiredHeaderParameters.join(", ") || "-"}</small>
+                  <small>{route.responses.map((response) => `${response.statusCode} ${response.contentType}${response.examples.length ? ` examples: ${response.examples.join(", ")}` : ""}`).join(" · ")}</small>
+                </div>
+              ))}
+              {contractRoutes.length === 0 && <EmptyState icon={<FileJson size={28} />} text={lang === "ru" ? "Выбери валидную спецификацию." : "Select a valid specification."} compact />}
+            </div>
+          </div>
         </article>
       </section>
     );
@@ -2226,6 +2421,20 @@ function App() {
               <button className="soft-button" onClick={rotateApiKey} disabled={!canWrite}><KeyRound size={16} />{t.rotateApiKey}</button>
             </div>
           )}
+          {selectedInstance && (
+            <div className="instance-settings-grid">
+              <label className="check-row">
+                <input type="checkbox" checked={rateLimitEnabled} onChange={(event) => setRateLimitEnabled(event.target.checked)} disabled={!canWrite} />
+                {lang === "ru" ? "Rate limit включён" : "Rate limit enabled"}
+              </label>
+              <label>{lang === "ru" ? "Запросов" : "Requests"}<input type="number" min={1} value={rateLimitRequests} onChange={(event) => setRateLimitRequests(Number(event.target.value))} disabled={!canWrite} /></label>
+              <label>{lang === "ru" ? "Окно, сек" : "Window, sec"}<input type="number" min={1} value={rateLimitWindowSeconds} onChange={(event) => setRateLimitWindowSeconds(Number(event.target.value))} disabled={!canWrite} /></label>
+              <button className="soft-button" onClick={saveInstanceSettings} disabled={!canWrite || busy["instance-settings"]}>
+                {busy["instance-settings"] ? <Loader2 className="spin" size={16} /> : <Settings2 size={16} />}
+                {t.save}
+              </button>
+            </div>
+          )}
           <div className="request-line">
             <select value={mockMethod} onChange={(event) => setMockMethod(event.target.value)}>
               <option>GET</option>
@@ -2242,6 +2451,66 @@ function App() {
           </div>
           <label>{t.mockBody}<textarea className="body-editor" value={mockBody} onChange={(event) => setMockBody(event.target.value)} /></label>
           <ResponseBlock title={t.response} value={mockResponse} clearLabel={t.clear} onClear={() => setMockResponse("")} />
+        </article>
+
+        <article className="surface runtime-panel scenario-panel">
+          <div className="surface-heading">
+            <div>
+              <p className="eyebrow">Scenario editor</p>
+              <h2>{lang === "ru" ? "Сценарии ответов" : "Response scenarios"}</h2>
+            </div>
+            <button className="soft-button" onClick={() => selectedInstance && refreshScenarios(selectedInstance.id)} disabled={!selectedInstance}>
+              <RefreshCw size={16} />
+              {t.refresh}
+            </button>
+          </div>
+          <div className="scenario-form">
+            <label>{lang === "ru" ? "Название" : "Name"}<input value={scenarioName} onChange={(event) => setScenarioName(event.target.value)} disabled={!canWrite} /></label>
+            <label>{lang === "ru" ? "Операция" : "Operation"}
+              <select value={`${scenarioMethod} ${scenarioPathTemplate}`} onChange={(event) => {
+                const [method, ...pathParts] = event.target.value.split(" ");
+                const route = contractRoutes.find((item) => item.method === method && item.pathTemplate === pathParts.join(" "));
+                setScenarioMethod(method);
+                setScenarioPathTemplate(pathParts.join(" "));
+                setScenarioOperationId(route?.operationId ?? "");
+              }} disabled={!canWrite}>
+                <option value={`${scenarioMethod} ${scenarioPathTemplate}`}>{scenarioMethod} {scenarioPathTemplate}</option>
+                {contractRoutes.map((route) => (
+                  <option value={`${route.method} ${route.pathTemplate}`} key={`${route.method}-${route.pathTemplate}`}>{route.method} {route.pathTemplate}</option>
+                ))}
+              </select>
+            </label>
+            <label>{lang === "ru" ? "Статус" : "Status"}<input type="number" min={100} max={599} value={scenarioStatusCode} onChange={(event) => setScenarioStatusCode(Number(event.target.value))} disabled={!canWrite} /></label>
+            <label>{lang === "ru" ? "Приоритет" : "Priority"}<input type="number" value={scenarioPriority} onChange={(event) => setScenarioPriority(Number(event.target.value))} disabled={!canWrite} /></label>
+            <label>{lang === "ru" ? "Задержка, мс" : "Delay, ms"}<input type="number" min={0} value={scenarioDelayMs} onChange={(event) => setScenarioDelayMs(Number(event.target.value))} disabled={!canWrite} /></label>
+            <label className="check-row">
+              <input type="checkbox" checked={scenarioEnabled} onChange={(event) => setScenarioEnabled(event.target.checked)} disabled={!canWrite} />
+              {lang === "ru" ? "Включён" : "Enabled"}
+            </label>
+            <label className="scenario-body-field">{lang === "ru" ? "Тело ответа с шаблонами" : "Response body with templates"}
+              <textarea className="body-editor" value={scenarioBody} onChange={(event) => setScenarioBody(event.target.value)} disabled={!canWrite} />
+            </label>
+            <button className="primary-button" onClick={saveScenario} disabled={!selectedInstance || !canWrite || busy["scenario-save"]}>
+              {busy["scenario-save"] ? <Loader2 className="spin" size={16} /> : <Play size={16} />}
+              {editingScenarioId ? t.save : lang === "ru" ? "Добавить сценарий" : "Add scenario"}
+            </button>
+          </div>
+          <div className="stack-list panel-scroll">
+            {scenarios.map((scenario) => (
+              <div className="scenario-card" key={scenario.id}>
+                <div>
+                  <strong>{scenario.name}</strong>
+                  <small>{scenario.enabled ? "ON" : "OFF"} · p{scenario.priority} · {scenario.method ?? "-"} {scenario.pathTemplate ?? scenario.operationId ?? "-"}</small>
+                  <small>{scenario.statusCode ?? "-"} · {scenario.delayMs}ms</small>
+                </div>
+                <div className="card-actions">
+                  <button className="soft-button" onClick={() => editScenario(scenario)} disabled={!canWrite}>{t.save}</button>
+                  <button className="icon-button danger-icon" onClick={() => deleteScenario(scenario.id)} disabled={!canWrite}><Trash2 size={16} /></button>
+                </div>
+              </div>
+            ))}
+            {scenarios.length === 0 && <EmptyState icon={<Braces size={28} />} text={lang === "ru" ? "Сценарии пока не настроены." : "No scenarios configured yet."} compact />}
+          </div>
         </article>
 
         <article className="surface runtime-panel">
@@ -2952,6 +3221,21 @@ function suggestUsername(identifier: string) {
 
 function ensurePath(path: string) {
   return path.startsWith("/") ? path : `/${path}`;
+}
+
+function parseJsonOrText(value: string): unknown {
+  try {
+    return JSON.parse(value);
+  } catch {
+    return value;
+  }
+}
+
+function formatBody(value: unknown): string {
+  if (typeof value === "string") {
+    return value;
+  }
+  return JSON.stringify(value ?? {}, null, 2);
 }
 
 function readStoredUser(): User | null {

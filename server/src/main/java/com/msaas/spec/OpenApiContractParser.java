@@ -104,7 +104,10 @@ public class OpenApiContractParser {
         apiResponses.forEach((code, response) -> {
             int status = parseStatus(code);
             ResponseBody body = responseBody(response);
-            responses.put(String.valueOf(status), new MockResponseDefinition(status, body.contentType(), body.body(), 0));
+            MockResponseDefinition definition = new MockResponseDefinition(status, body.contentType(), body.body(), 0);
+            definition.setExamples(body.examples());
+            definition.setContents(body.contents());
+            responses.put(String.valueOf(status), definition);
         });
         return responses;
     }
@@ -122,23 +125,32 @@ public class OpenApiContractParser {
 
     private ResponseBody responseBody(ApiResponse response) {
         if (response == null || response.getContent() == null || response.getContent().isEmpty()) {
-            return new ResponseBody("application/json", Map.of("ok", true));
+            return new ResponseBody(
+                    "application/json",
+                    Map.of("ok", true),
+                    Map.of(),
+                    Map.of("application/json", new MockResponseDefinition.ResponseContent(Map.of("ok", true), Map.of()))
+            );
         }
 
         Content content = response.getContent();
-        String contentType = content.containsKey("application/json")
+        Map<String, MockResponseDefinition.ResponseContent> variants = new LinkedHashMap<>();
+        content.forEach((contentType, mediaType) -> {
+            Map<String, Object> examples = mediaType == null ? Map.of() : extractExamples(mediaType);
+            Object example = mediaType == null ? null : extractExample(mediaType);
+            Object body = example == null ? exampleFromSchema(mediaType == null ? null : mediaType.getSchema()) : example;
+            variants.put(contentType, new MockResponseDefinition.ResponseContent(body, examples));
+        });
+
+        String contentType = variants.containsKey("application/json")
                 ? "application/json"
-                : content.keySet().stream().findFirst().orElse("application/json");
-        MediaType mediaType = content.get(contentType);
-        if (mediaType == null) {
-            return new ResponseBody(contentType, Map.of("ok", true));
+                : variants.keySet().stream().findFirst().orElse("application/json");
+        MockResponseDefinition.ResponseContent selected = variants.get(contentType);
+        if (selected == null) {
+            return new ResponseBody(contentType, Map.of("ok", true), Map.of(), variants);
         }
 
-        Object example = extractExample(mediaType);
-        if (example != null) {
-            return new ResponseBody(contentType, example);
-        }
-        return new ResponseBody(contentType, exampleFromSchema(mediaType.getSchema()));
+        return new ResponseBody(contentType, selected.getBody(), selected.getExamples(), variants);
     }
 
     private Object extractExample(MediaType mediaType) {
@@ -149,6 +161,21 @@ public class OpenApiContractParser {
             return normalizeExample(mediaType.getExamples().values().iterator().next().getValue());
         }
         return null;
+    }
+
+    private Map<String, Object> extractExamples(MediaType mediaType) {
+        Map<String, Object> examples = new LinkedHashMap<>();
+        if (mediaType.getExample() != null) {
+            examples.put("default", normalizeExample(mediaType.getExample()));
+        }
+        if (mediaType.getExamples() != null) {
+            mediaType.getExamples().forEach((name, example) -> {
+                if (example != null && example.getValue() != null) {
+                    examples.put(name, normalizeExample(example.getValue()));
+                }
+            });
+        }
+        return examples;
     }
 
     private Object normalizeExample(Object value) {
@@ -254,6 +281,11 @@ public class OpenApiContractParser {
         }
     }
 
-    private record ResponseBody(String contentType, Object body) {
+    private record ResponseBody(
+            String contentType,
+            Object body,
+            Map<String, Object> examples,
+            Map<String, MockResponseDefinition.ResponseContent> contents
+    ) {
     }
 }

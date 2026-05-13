@@ -42,7 +42,13 @@ X-Mock-Api-Key: <key-shown-once>
 - Long public mock token stored as a hash in MongoDB.
 - Public URL and mock API key are shown once after publish or rotation.
 - Optional `X-Mock-Api-Key` per instance.
+- Per-instance rate limits with `429` and `Retry-After`.
+- Scenario overrides for published mock instances.
+- Safe response templates such as `{{path.id}}`, `{{query.name}}`, `{{body.field}}`, `{{uuid}}`, and `{{now}}`.
 - Response status override with `__status` or `X-Mock-Status`.
+- Named OpenAPI response example selection with `__example` or `X-Mock-Example`.
+- `Accept`-aware response content negotiation when an OpenAPI response declares multiple content types.
+- Debug mismatch hints with `__debug=true` or `X-Mock-Debug: true`.
 - Delay override with `__delay` or `X-Mock-Delay-Ms`, capped at 10 seconds.
 - Required query/header/body matching from OpenAPI operations.
 - Stateful CRUD behavior and state snapshot endpoint.
@@ -212,6 +218,7 @@ Specs:
 - `POST /api/projects/{projectId}/spec-versions`
 - `GET /api/projects/{projectId}/spec-versions`
 - `DELETE /api/spec-versions/{versionId}`
+- `GET /api/spec-versions/{versionId}/routes`
 
 Instances:
 
@@ -219,11 +226,16 @@ Instances:
 - `GET /api/projects/{projectId}/instances`
 - `GET /api/instances/{instanceId}`
 - `DELETE /api/instances/{instanceId}`
+- `PATCH /api/instances/{instanceId}/settings`
 - `POST /api/instances/{instanceId}/reset-state`
 - `GET /api/instances/{instanceId}/state`
 - `POST /api/instances/{instanceId}/rotate-token`
 - `POST /api/instances/{instanceId}/rotate-api-key`
 - `GET /api/instances/{instanceId}/logs`
+- `GET /api/instances/{instanceId}/scenarios`
+- `POST /api/instances/{instanceId}/scenarios`
+- `PATCH /api/instances/{instanceId}/scenarios/{scenarioId}`
+- `DELETE /api/instances/{instanceId}/scenarios/{scenarioId}`
 
 Runtime:
 
@@ -323,6 +335,26 @@ Frontend:
 ```powershell
 cd D:\MSaaS\ui
 npm run build
+npm run test:e2e
+```
+
+Load and runtime regression smoke against a running local stack:
+
+```powershell
+cd D:\MSaaS\ui
+npm run test:load
+```
+
+The load script creates unique users, private projects, OpenAPI specs, and four mock instances per user:
+scenario, stateful, API-key protected, and low-rate-limit. It then sends parallel mock requests and verifies project isolation, scenario templates, named examples, `Accept` content negotiation, API-key rejection, stateful CRUD, exact route priority, `429` + `Retry-After`, and rate-limit log records.
+
+You can tune it with environment variables:
+
+```powershell
+$env:LOAD_USERS=12
+$env:LOAD_REQUESTS_PER_USER=100
+$env:LOAD_CONCURRENCY=48
+npm run test:load
 ```
 
 Backend unit tests:

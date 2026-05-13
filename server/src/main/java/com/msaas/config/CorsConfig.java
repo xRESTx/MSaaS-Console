@@ -22,8 +22,19 @@ public class CorsConfig {
         CorsConfiguration configuration = new CorsConfiguration();
         configuration.setAllowedOrigins(parseOrigins(properties.getCors().getAllowedOrigins()));
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "Accept", "X-Requested-With"));
-        configuration.setExposedHeaders(List.of("Location"));
+        configuration.setAllowedHeaders(List.of(
+                "Authorization",
+                "Content-Type",
+                "Accept",
+                "X-Requested-With",
+                "X-Mock-Api-Key",
+                "X-Mock-Status",
+                "X-Mock-Example",
+                "X-Mock-Debug",
+                "X-Mock-Delay-Ms",
+                "X-Trace-Id"
+        ));
+        configuration.setExposedHeaders(List.of("Location", "Retry-After"));
         configuration.setAllowCredentials(false);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();

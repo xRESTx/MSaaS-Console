@@ -81,4 +81,66 @@ class OpenApiContractParserTest {
         assertThat(parsed.contract().getRoutes().getFirst().getRequiredHeaderParameters()).containsExactly("X-Trace-Id");
         assertThat(parsed.contract().getRoutes().getFirst().isRequestBodyRequired()).isTrue();
     }
+
+    @Test
+    void extractsNamedResponseExamples() {
+        String source = """
+                openapi: 3.0.3
+                info:
+                  title: Orders
+                  version: 1.0.0
+                paths:
+                  /orders:
+                    get:
+                      responses:
+                        "200":
+                          description: OK
+                          content:
+                            application/json:
+                              examples:
+                                paid:
+                                  value:
+                                    id: ord_1
+                                    paid: true
+                                unpaid:
+                                  value:
+                                    id: ord_2
+                                    paid: false
+                """;
+
+        OpenApiContractParser.ParsedContract parsed = parser.parse(source);
+
+        assertThat(parsed.valid()).isTrue();
+        assertThat(parsed.contract().getRoutes().getFirst().defaultResponse().getExamples())
+                .containsKeys("paid", "unpaid");
+    }
+
+    @Test
+    void keepsMultipleResponseContentTypesForAcceptNegotiation() {
+        String source = """
+                openapi: 3.0.3
+                info:
+                  title: Orders
+                  version: 1.0.0
+                paths:
+                  /orders:
+                    get:
+                      responses:
+                        "200":
+                          description: OK
+                          content:
+                            text/plain:
+                              example: plain orders
+                            application/json:
+                              example:
+                                kind: json
+                """;
+
+        OpenApiContractParser.ParsedContract parsed = parser.parse(source);
+
+        assertThat(parsed.valid()).isTrue();
+        assertThat(parsed.contract().getRoutes().getFirst().defaultResponse().getContentType()).isEqualTo("application/json");
+        assertThat(parsed.contract().getRoutes().getFirst().defaultResponse().getContents())
+                .containsKeys("application/json", "text/plain");
+    }
 }

@@ -45,4 +45,27 @@ class RouteMatcherTest {
         assertThat(matcher.match(contract, "POST", "/orders", Map.of("tenant", List.of("acme")), Map.of(), "{}"))
                 .isEmpty();
     }
+
+    @Test
+    void prefersExactRouteOverTemplatedRoute() {
+        MockRoute templated = new MockRoute("GET", "/orders/{id}", "getOrder", 200);
+        MockRoute exact = new MockRoute("GET", "/orders/search", "searchOrders", 200);
+        NormalizedContract contract = new NormalizedContract("Demo", "1.0.0", List.of(templated, exact));
+
+        RouteMatch match = matcher.match(contract, "GET", "/orders/search").orElseThrow();
+
+        assertThat(match.route()).isSameAs(exact);
+    }
+
+    @Test
+    void returnsSafeMismatchHints() {
+        MockRoute route = new MockRoute("POST", "/orders", "createOrder", 201);
+        route.setRequiredQueryParameters(List.of("tenant"));
+        route.setRequestBodyRequired(true);
+        NormalizedContract contract = new NormalizedContract("Demo", "1.0.0", List.of(route));
+
+        List<String> hints = matcher.mismatchHints(contract, "POST", "/orders", Map.of(), Map.of(), null);
+
+        assertThat(hints).anySatisfy(hint -> assertThat(hint).contains("missing query"));
+    }
 }

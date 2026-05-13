@@ -8,6 +8,8 @@ import org.springframework.data.mongodb.core.mapping.Field;
 import org.springframework.data.mongodb.core.mapping.Document;
 
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 
 @Document("mock_instances")
 public class MockInstance {
@@ -33,6 +35,10 @@ public class MockInstance {
     private InstanceMode mode;
     private InstanceStatus status;
     private NormalizedContract contract;
+    private boolean rateLimitEnabled = true;
+    private int rateLimitRequests = 120;
+    private int rateLimitWindowSeconds = 60;
+    private List<MockScenario> scenarios = new ArrayList<>();
     private Instant createdAt;
     private Instant updatedAt;
 
@@ -67,6 +73,9 @@ public class MockInstance {
         this.requireApiKey = requireApiKey;
         this.apiKeyHash = apiKeyHash;
         this.apiKeyPreview = apiKeyPreview;
+        this.rateLimitEnabled = true;
+        this.rateLimitRequests = 120;
+        this.rateLimitWindowSeconds = 60;
         this.createdAt = Instant.now();
         this.updatedAt = this.createdAt;
     }
@@ -182,6 +191,41 @@ public class MockInstance {
 
     public void setContract(NormalizedContract contract) {
         this.contract = contract;
+    }
+
+    public boolean isRateLimitEnabled() {
+        return rateLimitEnabled;
+    }
+
+    public void setRateLimitEnabled(boolean rateLimitEnabled) {
+        this.rateLimitEnabled = rateLimitEnabled;
+    }
+
+    public int getRateLimitRequests() {
+        return rateLimitRequests <= 0 ? 120 : rateLimitRequests;
+    }
+
+    public void setRateLimitRequests(int rateLimitRequests) {
+        this.rateLimitRequests = rateLimitRequests <= 0 ? 120 : rateLimitRequests;
+    }
+
+    public int getRateLimitWindowSeconds() {
+        return rateLimitWindowSeconds <= 0 ? 60 : rateLimitWindowSeconds;
+    }
+
+    public void setRateLimitWindowSeconds(int rateLimitWindowSeconds) {
+        this.rateLimitWindowSeconds = rateLimitWindowSeconds <= 0 ? 60 : rateLimitWindowSeconds;
+    }
+
+    public List<MockScenario> getScenarios() {
+        if (scenarios == null) {
+            scenarios = new ArrayList<>();
+        }
+        return scenarios;
+    }
+
+    public void setScenarios(List<MockScenario> scenarios) {
+        this.scenarios = scenarios == null ? new ArrayList<>() : scenarios;
     }
 
     public Instant getCreatedAt() {

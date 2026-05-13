@@ -1521,6 +1521,59 @@ button:disabled {
   gap: 8px;
 }
 
+.instance-settings-grid,
+.scenario-form {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  align-items: end;
+}
+
+.scenario-form {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.scenario-body-field {
+  grid-column: 1 / -1;
+}
+
+.route-explorer {
+  display: grid;
+  gap: 10px;
+  min-height: 0;
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+}
+
+.compact-heading {
+  gap: 10px;
+}
+
+.route-list {
+  max-height: 260px;
+}
+
+.route-card,
+.scenario-card {
+  display: grid;
+  gap: 5px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px;
+  background: var(--surface-2);
+}
+
+.scenario-card {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.route-card small,
+.scenario-card small {
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
 .response-box {
   display: grid;
   gap: 8px;
@@ -1974,7 +2027,10 @@ button:disabled {
 
   .secret-panel,
   .api-key-box,
-  .request-line {
+  .request-line,
+  .instance-settings-grid,
+  .scenario-form,
+  .scenario-card {
     grid-template-columns: 1fr;
   }
 

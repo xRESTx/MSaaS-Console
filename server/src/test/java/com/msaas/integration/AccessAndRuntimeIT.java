@@ -65,11 +65,41 @@ class AccessAndRuntimeIT {
         String publicUrl = String.valueOf(instance.get("publicUrl"));
         assertThat(publicUrl).contains("/mock/");
 
-        HttpResponse<String> mockResponse = get(publicUrl + "/orders");
-        assertThat(mockResponse.statusCode()).isEqualTo(200);
+        HttpResponse<String> forbiddenInstance = request(HttpMethod.GET, "/api/instances/" + instance.get("id"), otherToken, null);
+        assertThat(forbiddenInstance.statusCode()).isEqualTo(404);
+
+        requestMap(HttpMethod.PATCH, "/api/instances/" + instance.get("id") + "/settings", ownerToken, Map.of(
+                "rateLimitEnabled", true,
+                "rateLimitRequests", 2,
+                "rateLimitWindowSeconds", 60
+        ));
+
+        requestMap(HttpMethod.POST, "/api/instances/" + instance.get("id") + "/scenarios", ownerToken, Map.of(
+                "name", "Scenario response",
+                "enabled", true,
+                "priority", 200,
+                "method", "GET",
+                "pathTemplate", "/orders",
+                "statusCode", 202,
+                "contentType", "application/json",
+                "body", Map.of("scenario", "{{query.name}}", "requestId", "{{uuid}}"),
+                "delayMs", 0
+        ));
+
+        HttpResponse<String> mockResponse = get(publicUrl + "/orders?name=alice");
+        assertThat(mockResponse.statusCode()).isEqualTo(202);
+        assertThat(mockResponse.body()).contains("alice").contains("requestId");
+
+        HttpResponse<String> secondMockResponse = get(publicUrl + "/orders?name=bob");
+        assertThat(secondMockResponse.statusCode()).isEqualTo(202);
+
+        HttpResponse<String> limitedResponse = get(publicUrl + "/orders?name=carol");
+        assertThat(limitedResponse.statusCode()).isEqualTo(429);
+        assertThat(limitedResponse.headers().firstValue("Retry-After")).isPresent();
 
         List<Map<String, Object>> logs = requestList(HttpMethod.GET, "/api/instances/" + instance.get("id") + "/logs", ownerToken, null);
         assertThat(logs).isNotEmpty();
+        assertThat(logs.stream().map(log -> String.valueOf(log.get("error")))).contains("Rate limit exceeded");
     }
 
     private String register(String email) throws Exception {
