@@ -17,6 +17,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 
 @Service
@@ -48,7 +49,14 @@ public class ProjectService {
     }
 
     public Project create(String ownerId, String name, String description) {
-        Project project = projectRepository.save(new Project(ownerId, name.trim(), description == null ? "" : description.trim()));
+        String normalizedName = name == null ? "" : name.trim();
+        if (normalizedName.isBlank()) {
+            throw ApiException.badRequest("Project name is required");
+        }
+        if (hasAccessibleProjectNamed(ownerId, normalizedName, null)) {
+            throw ApiException.conflict("Project name already exists for this user");
+        }
+        Project project = projectRepository.save(new Project(ownerId, normalizedName, description == null ? "" : description.trim()));
         auditService.record(project.getId(), ownerId, "PROJECT_CREATED", "project", project.getId(), "Project created");
         return project;
     }
@@ -106,6 +114,9 @@ public class ProjectService {
                 .orElseThrow(() -> ApiException.notFound("User not found"));
         if (user.getId().equals(project.getOwnerId())) {
             throw ApiException.badRequest("Project owner is already the owner");
+        }
+        if (hasAccessibleProjectNamed(user.getId(), project.getName(), project.getId())) {
+            throw ApiException.conflict("User already has access to a project with this name");
         }
         ProjectRole safeRole = role == null || role == ProjectRole.OWNER ? ProjectRole.VIEWER : role;
         ProjectMember member = project.getMembers()
@@ -192,6 +203,18 @@ public class ProjectService {
             return userRepository.findByEmail(normalized);
         }
         return userRepository.findByUsername(normalized);
+    }
+
+    private boolean hasAccessibleProjectNamed(String userId, String name, String excludedProjectId) {
+        String normalizedName = name == null ? "" : name.trim().toLowerCase(Locale.ROOT);
+        if (normalizedName.isBlank()) {
+            return false;
+        }
+        return projectRepository.findAccessibleByUserId(userId, Sort.unsorted())
+                .stream()
+                .anyMatch(project -> (excludedProjectId == null || !Objects.equals(project.getId(), excludedProjectId))
+                        && project.getName() != null
+                        && project.getName().trim().toLowerCase(Locale.ROOT).equals(normalizedName));
     }
 
     private Optional<ProjectRole> roleFor(Project project, String userId) {

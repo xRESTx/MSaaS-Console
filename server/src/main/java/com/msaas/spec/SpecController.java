@@ -65,6 +65,7 @@ public class SpecController {
             ValidationStatus status,
             List<String> validationErrors,
             int routeCount,
+            String source,
             Instant createdAt
     ) {
         public static SpecVersionView from(SpecVersion version) {
@@ -77,6 +78,7 @@ public class SpecController {
                     version.getStatus(),
                     version.getValidationErrors(),
                     routeCount,
+                    version.getSource(),
                     version.getCreatedAt()
             );
         }

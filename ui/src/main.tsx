@@ -73,6 +73,7 @@ type SpecVersion = {
   status: "VALID" | "INVALID";
   validationErrors: string[];
   routeCount: number;
+  source: string;
 };
 
 type ContractRoute = {
@@ -173,6 +174,7 @@ type RuntimeSlot = {
   instanceId: string;
   projectId: string;
   tokenPreview: string;
+  workerKey: string | null;
   mode: string;
   loadedAt: string;
   stateCollectionCount: number;
@@ -806,8 +808,7 @@ const views: Array<{ key: ViewKey; icon: React.ReactNode }> = [
   { key: "runtime", icon: <Server size={16} /> },
   { key: "logs", icon: <ListFilter size={16} /> },
   { key: "access", icon: <Users size={16} /> },
-  { key: "settings", icon: <Settings2 size={16} /> },
-  { key: "admin", icon: <ShieldCheck size={16} /> }
+  { key: "settings", icon: <Settings2 size={16} /> }
 ];
 
 const viewRoutes: Record<ViewKey, string> = {
@@ -821,15 +822,36 @@ const viewRoutes: Record<ViewKey, string> = {
 };
 
 const routeViews = Object.fromEntries(Object.entries(viewRoutes).map(([key, path]) => [path, key])) as Record<string, ViewKey>;
+const projectViewSegments: Partial<Record<ViewKey, string>> = {
+  overview: "overview",
+  specs: "specifications",
+  runtime: "runtime",
+  logs: "logs",
+  access: "access"
+};
+const segmentViews = Object.fromEntries(Object.entries(projectViewSegments).map(([key, segment]) => [segment, key])) as Record<string, ViewKey>;
 
 type AppRoute = {
   view: ViewKey | null;
   publicView: PublicView;
   authStep: AuthStep;
+  projectSlug?: string;
 };
 
 function parseAppRoute(pathname: string): AppRoute {
   const normalized = pathname.replace(/\/+$/, "") || "/";
+  const projectRoute = normalized.match(/^\/console\/([^/]+)\/([^/]+)$/);
+  if (projectRoute) {
+    const projectView = segmentViews[projectRoute[2]];
+    if (projectView) {
+      return {
+        view: projectView,
+        publicView: "auth",
+        authStep: "identifier",
+        projectSlug: safeDecode(projectRoute[1])
+      };
+    }
+  }
   const routeView = routeViews[normalized];
   if (routeView) {
     return { view: routeView, publicView: "auth", authStep: "identifier" };
@@ -847,6 +869,35 @@ function writeRoute(path: string, replace = false) {
   if (window.location.pathname === path) return;
   const method = replace ? "replaceState" : "pushState";
   window.history[method](null, "", path);
+}
+
+function safeDecode(value: string) {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
+function projectRouteSegment(project: Pick<Project, "id" | "name">) {
+  const readable = project.name.trim().replace(/\s+/g, "-") || project.id;
+  return encodeURIComponent(readable);
+}
+
+function normalizeProjectSlug(value: string) {
+  return value.trim().toLowerCase().replace(/[-_\s]+/g, "");
+}
+
+function findProjectBySlug(projects: Project[], slug: string) {
+  const normalizedSlug = normalizeProjectSlug(safeDecode(slug));
+  return projects.find((project) =>
+    normalizeProjectSlug(project.name) === normalizedSlug ||
+    normalizeProjectSlug(project.id) === normalizedSlug
+  ) ?? null;
+}
+
+function isProjectView(view: ViewKey) {
+  return Boolean(projectViewSegments[view]);
 }
 
 function App() {
@@ -867,6 +918,9 @@ function App() {
   const [newPassword, setNewPassword] = useState("");
   const [projects, setProjects] = useState<Project[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState("");
+  const [pendingProjectSlug, setPendingProjectSlug] = useState(routeSeed.projectSlug ?? "");
+  const [projectMemberIds, setProjectMemberIds] = useState<string[]>([]);
+  const [projectLogCount, setProjectLogCount] = useState(0);
   const [projectName, setProjectName] = useState("Demo API");
   const [projectDescription, setProjectDescription] = useState("OpenAPI-backed mock project");
   const [projectFilter, setProjectFilter] = useState("");
@@ -950,7 +1004,7 @@ function App() {
   const selectedProject = projects.find((project) => project.id === selectedProjectId) ?? null;
   const selectedInstance = instances.find((instance) => instance.id === selectedInstanceId) ?? null;
   const isAdmin = user?.systemRole === "ADMIN";
-  const visibleViews = views.filter((item) => item.key !== "admin" || isAdmin);
+  const visibleViews = views;
   const canWrite = selectedProject?.role === "OWNER" || selectedProject?.role === "MEMBER";
   const canOwn = selectedProject?.role === "OWNER";
   const validSpecs = specVersions.filter((version) => version.status === "VALID").length;
@@ -968,10 +1022,10 @@ function App() {
   const memberListPage = paginate(members, memberPage, 7);
   const projectAuditListPage = paginate(audit, projectAuditPage, 100);
   const adminUserListPage = paginate(adminUsers, adminUserPage, 8);
-  const adminProjectListPage = paginate(adminProjects, adminProjectPage, 6);
-  const adminInstanceListPage = paginate(adminInstances, adminInstancePage, 6);
+  const adminProjectListPage = paginate(adminProjects, adminProjectPage, 50);
+  const adminInstanceListPage = paginate(adminInstances, adminInstancePage, 50);
   const adminSlotListPage = paginate(adminSlots, adminSlotPage, 8);
-  const allProjectMembers = projects.reduce((sum, project) => sum + project.memberCount, 0);
+  const allProjectMembers = projectMemberIds.length || projects.reduce((sum, project) => sum + project.memberCount, 0);
   const adminPageSize = 100;
 
   const authHeaders = useMemo(() => ({
@@ -1000,6 +1054,15 @@ function App() {
           return;
         }
         setView(route.view);
+        if (route.projectSlug) {
+          setPendingProjectSlug(route.projectSlug);
+          const routedProject = findProjectBySlug(projects, route.projectSlug);
+          if (routedProject) {
+            setSelectedProjectId(routedProject.id);
+          }
+        } else {
+          setPendingProjectSlug("");
+        }
         return;
       }
       setPublicView(route.publicView);
@@ -1007,7 +1070,7 @@ function App() {
     };
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);
-  }, []);
+  }, [projects]);
 
   useEffect(() => {
     if (!toast) return;
@@ -1020,6 +1083,8 @@ function App() {
       const route = parseAppRoute(window.location.pathname);
       if (!route.view) {
         writeRoute(viewRoutes[view], true);
+      } else if (route.projectSlug) {
+        setPendingProjectSlug(route.projectSlug);
       }
       void refreshProjects();
     } else if (parseAppRoute(window.location.pathname).view) {
@@ -1031,6 +1096,10 @@ function App() {
 
   useEffect(() => {
     if (selectedProjectId) {
+      const routedProject = projects.find((project) => project.id === selectedProjectId);
+      if (routedProject && isProjectView(view)) {
+        writeRoute(pathForView(view, routedProject), true);
+      }
       void refreshProjectDetails(selectedProjectId);
       setSpecPage(0);
       setInstancePage(0);
@@ -1060,6 +1129,8 @@ function App() {
       setRateLimitRequests(selectedInstance.rateLimitRequests);
       setRateLimitWindowSeconds(selectedInstance.rateLimitWindowSeconds);
       void refreshScenarios(selectedInstance.id);
+      void refreshLogs(selectedInstance.id);
+      void refreshState(selectedInstance.id);
     } else {
       setScenarios([]);
     }
@@ -1204,9 +1275,29 @@ function App() {
   async function refreshProjects() {
     await run("projects", async () => {
       const data = await api<Project[]>("/api/projects", { headers: authHeaders });
+      const memberLists = await Promise.all(data.map(async (project) => {
+        try {
+          return await api<ProjectMember[]>(`/api/projects/${project.id}/members`, { headers: authHeaders });
+        } catch {
+          return [];
+        }
+      }));
+      const uniqueMembers = new Set(memberLists.flat().map((member) => member.userId).filter(Boolean));
       setProjects(data);
-      if (!selectedProjectId && data.length > 0) {
-        setSelectedProjectId(data[0].id);
+      setProjectMemberIds([...uniqueMembers]);
+
+      const route = parseAppRoute(window.location.pathname);
+      const routeSlug = route.projectSlug ?? pendingProjectSlug;
+      const routedProject = routeSlug ? findProjectBySlug(data, routeSlug) : null;
+      const existingProject = data.find((project) => project.id === selectedProjectId) ?? null;
+      const nextProject = routedProject ?? existingProject ?? data[0] ?? null;
+
+      if (routedProject) {
+        setPendingProjectSlug("");
+      }
+      setSelectedProjectId(nextProject?.id ?? "");
+      if (nextProject && route.view && isProjectView(route.view)) {
+        writeRoute(pathForView(route.view, nextProject), true);
       }
     });
   }
@@ -1221,6 +1312,7 @@ function App() {
       setProjects((current) => [project, ...current]);
       setSelectedProjectId(project.id);
       setProjectCreateOpen(false);
+      writeRoute(pathForView("overview", project));
       notify(t.projectCreated);
     });
   }
@@ -1231,20 +1323,33 @@ function App() {
         api<SpecVersion[]>(`/api/projects/${projectId}/spec-versions`, { headers: authHeaders }),
         api<MockInstance[]>(`/api/projects/${projectId}/instances`, { headers: authHeaders }),
         api<ProjectMember[]>(`/api/projects/${projectId}/members`, { headers: authHeaders }),
-        api<AuditEvent[]>(`/api/projects/${projectId}/audit`, { headers: authHeaders }),
+        api<AuditEvent[]>(`/api/projects/${projectId}/audit?limit=500`, { headers: authHeaders }),
         api<RuntimeWorker[]>("/api/runtime/workers", { headers: authHeaders }),
         api<RuntimeSlot[]>("/api/runtime/slots", { headers: authHeaders })
       ]);
+      const projectLogEntries = await Promise.all(projectInstances.map(async (instance) => {
+        try {
+          const instanceLogs = await api<RequestLog[]>(`/api/instances/${instance.id}/logs?limit=500`, { headers: authHeaders });
+          return [instance.id, instanceLogs] as const;
+        } catch {
+          return [instance.id, [] as RequestLog[]] as const;
+        }
+      }));
+      const logMap = new Map(projectLogEntries);
+      const nextSelectedInstanceId = projectInstances.some((instance) => instance.id === selectedInstanceId)
+        ? selectedInstanceId
+        : projectInstances[0]?.id ?? "";
       setSpecVersions(versions);
+      setSpecSource(versions[0]?.source || sampleSpec);
+      setSpecName(versions[0]?.name || "orders-openapi.yaml");
       setInstances(projectInstances);
       setMembers(projectMembers);
       setAudit(projectAudit);
       setRuntimeWorkers(workers);
       setRuntimeSlots(slots);
-      setSelectedInstanceId((current) =>
-        projectInstances.some((instance) => instance.id === current) ? current : projectInstances[0]?.id ?? ""
-      );
-      setLogs([]);
+      setProjectLogCount(projectLogEntries.reduce((sum, [, instanceLogs]) => sum + instanceLogs.length, 0));
+      setSelectedInstanceId(nextSelectedInstanceId);
+      setLogs(nextSelectedInstanceId ? logMap.get(nextSelectedInstanceId) ?? [] : []);
       setSelectedLog(null);
     });
   }
@@ -1275,7 +1380,7 @@ function App() {
         api<AdminSummary>("/api/admin/summary", { headers: authHeaders }),
         api<AdminUser[]>(`/api/admin/users${suffix}`, { headers: authHeaders }),
         api<AdminProject[]>(`/api/admin/projects${suffix}`, { headers: authHeaders }),
-        api<AdminInstance[]>("/api/admin/instances", { headers: authHeaders }),
+        api<AdminInstance[]>("/api/admin/instances?limit=1000", { headers: authHeaders }),
         api<AdminPage<AdminLog>>(`/api/admin/logs?page=${logPage}&size=${adminPageSize}${logUserSuffix}`, { headers: authHeaders }),
         api<AdminPage<AdminAudit>>(`/api/admin/audit?page=${auditPage}&size=${adminPageSize}${auditActorSuffix}`, { headers: authHeaders }),
         api<RuntimeWorker[]>("/api/admin/runtime/workers", { headers: authHeaders }),
@@ -1449,17 +1554,21 @@ function App() {
     });
   }
 
-  async function refreshState() {
-    if (!selectedInstance) return;
+  async function refreshState(instanceId = selectedInstanceId) {
+    if (!instanceId) return;
     await run("state", async () => {
-      setStateSnapshot(await api<Record<string, unknown>>(`/api/instances/${selectedInstance.id}/state`, { headers: authHeaders }));
+      setStateSnapshot(await api<Record<string, unknown>>(`/api/instances/${instanceId}/state`, { headers: authHeaders }));
     });
   }
 
-  async function refreshLogs() {
-    if (!selectedInstance) return;
+  async function refreshLogs(instanceId = selectedInstanceId) {
+    if (!instanceId) return;
     await run("logs", async () => {
-      setLogs(await api<RequestLog[]>(`/api/instances/${selectedInstance.id}/logs`, { headers: authHeaders }));
+      const instanceLogs = await api<RequestLog[]>(`/api/instances/${instanceId}/logs?limit=500`, { headers: authHeaders });
+      if (instanceId === selectedInstanceId) {
+        setLogs(instanceLogs);
+      }
+      setProjectLogCount((current) => Math.max(current, instanceLogs.length));
     });
   }
 
@@ -1576,15 +1685,17 @@ function App() {
         body: JSON.stringify({ confirmName: deleteConfirmName })
       });
       const remainingProjects = projects.filter((item) => item.id !== project.id);
+      const nextProject = remainingProjects[0] ?? null;
       setProjects(remainingProjects);
-      setSelectedProjectId(remainingProjects[0]?.id ?? "");
+      setSelectedProjectId(nextProject?.id ?? "");
       setSpecVersions([]);
       setInstances([]);
       setMembers([]);
       setAudit([]);
       setLogs([]);
+      setProjectLogCount(0);
       closeDeleteDialog();
-      navigateView("overview");
+      navigateView("overview", false, nextProject);
       notify(t.projectDeleted);
     });
   }
@@ -1736,7 +1847,9 @@ function App() {
   }
 
   function notify(message: string) {
-    setToast({ id: Date.now(), text: message });
+    const text = String(message ?? "").trim();
+    if (!text) return;
+    setToast({ id: Date.now(), text });
   }
 
   function showError(error: unknown) {
@@ -1763,9 +1876,24 @@ function App() {
     return target.kind === "project" || target.kind === "admin-project" || target.kind === "admin-user";
   }
 
-  function navigateView(nextView: ViewKey, replace = false) {
+  function pathForView(nextView: ViewKey, projectOverride: Project | null = selectedProject) {
+    const segment = projectViewSegments[nextView];
+    if (nextView === "admin" || nextView === "settings" || !segment || !projectOverride) {
+      return viewRoutes[nextView];
+    }
+    return `/console/${projectRouteSegment(projectOverride)}/${segment}`;
+  }
+
+  function navigateView(nextView: ViewKey, replace = false, projectOverride: Project | null = selectedProject) {
     setView(nextView);
-    writeRoute(viewRoutes[nextView], replace);
+    writeRoute(pathForView(nextView, projectOverride), replace);
+  }
+
+  function selectProject(project: Project) {
+    setSelectedProjectId(project.id);
+    if (isProjectView(view)) {
+      writeRoute(pathForView(view, project));
+    }
   }
 
   function openLoginScreen(replace = false) {
@@ -2042,7 +2170,7 @@ function App() {
                 <button className="soft-button" onClick={backToIdentifier}>{t.back}</button>
               )}
             </div>
-            {toast && <p className="notice">{toast.text}</p>}
+            {toast?.text && <p className="notice">{toast.text}</p>}
           </section>
         </section>
       </main>
@@ -2073,18 +2201,31 @@ function App() {
             </div>
           </div>
           <div className="topbar-actions">
+            <div className="account-chip" title={user?.email ?? ""}>
+              <span className="account-avatar">{displayUser(user ?? {}).slice(0, 2).toUpperCase()}</span>
+              <span>
+                <strong>{displayUser(user ?? {})}</strong>
+                <small>{user?.systemRole ?? "USER"}</small>
+              </span>
+            </div>
+            {isAdmin && (
+              <a href={viewRoutes.admin} className={cx("soft-button stable-action", view === "admin" && "active")} onClick={(event) => { event.preventDefault(); navigateView("admin"); }}>
+                <ShieldCheck size={16} />
+                {t.admin}
+              </a>
+            )}
             {shellControls}
           </div>
         </header>
 
         <header className="console-topbar">
           <div>
-            <p className="eyebrow">{t.workspace}</p>
-            <h1>{selectedProject?.name ?? t.noProject}</h1>
+            <p className="eyebrow">{view === "admin" ? t.admin : t.workspace}</p>
+            <h1>{view === "admin" ? t.admin : selectedProject?.name ?? t.noProject}</h1>
           </div>
           <div className="topbar-actions">
-            {selectedProject && <RoleBadge role={selectedProject.role} />}
-            {canOwn && selectedProject && (
+            {selectedProject && view !== "admin" && <RoleBadge role={selectedProject.role} />}
+            {canOwn && selectedProject && view !== "admin" && (
               <button className="danger-button" onClick={() => openDeleteDialog({ kind: "project", id: selectedProject.id, name: selectedProject.name })}>
                 <Trash2 size={17} />
                 {t.deleteProject}
@@ -2095,14 +2236,14 @@ function App() {
 
         <nav className="view-tabs" aria-label="sections">
           {visibleViews.map((item) => (
-            <a key={item.key} href={viewRoutes[item.key]} className={cx("tab-button", view === item.key && "active")} onClick={(event) => { event.preventDefault(); navigateView(item.key); }}>
+            <a key={item.key} href={pathForView(item.key)} className={cx("tab-button", view === item.key && "active")} onClick={(event) => { event.preventDefault(); navigateView(item.key); }}>
               {item.icon}
               {t[item.key]}
             </a>
           ))}
         </nav>
 
-        {toast && (
+        {toast?.text && (
           <div className="notice-row">
             <span>{toast.text}</span>
             <button className="ghost-button tiny" onClick={() => setToast(null)}>{t.clear}</button>
@@ -2172,7 +2313,7 @@ function App() {
           <Metric icon={<Layers3 size={19} />} label={t.allProjects} value={projects.length} />
           <Metric icon={<Users size={19} />} label={t.members} value={allProjectMembers} />
           <Metric icon={<FileJson size={19} />} label={t.specs} value={specVersions.length} />
-          <Metric icon={<Activity size={19} />} label={t.logs} value={logs.length} />
+          <Metric icon={<Activity size={19} />} label={t.logs} value={projectLogCount} />
         </section>
         <section className="overview-grid">
           <article className="surface overview-panel">
@@ -2187,7 +2328,7 @@ function App() {
                 <button
                   className={cx("project-button", project.id === selectedProjectId && "active")}
                   key={project.id}
-                  onClick={() => setSelectedProjectId(project.id)}
+                  onClick={() => selectProject(project)}
                 >
                   <span className="project-avatar">{project.name.slice(0, 2).toUpperCase()}</span>
                   <span>
@@ -2217,7 +2358,7 @@ function App() {
               <Detail label={t.role} value={selectedProject?.role ?? "-"} />
               <Detail label={t.specs} value={String(specVersions.length)} />
               <Detail label={t.instances} value={String(instances.length)} />
-              <Detail label={t.logs} value={String(logs.length)} />
+              <Detail label={t.logs} value={String(projectLogCount)} />
             </div>
           </article>
           <article className="surface overview-panel">
@@ -2370,7 +2511,7 @@ function App() {
   function renderRuntime() {
     return (
       <section className="runtime-grid">
-        <article className="surface runtime-panel">
+        <article className="surface runtime-panel runtime-instance-panel">
           <div className="surface-heading">
             <div>
               <p className="eyebrow">{t.instances}</p>
@@ -2378,7 +2519,7 @@ function App() {
             </div>
             <button className="soft-button" onClick={() => selectedProjectId && refreshProjectDetails(selectedProjectId)}><RefreshCw size={16} />{t.refresh}</button>
           </div>
-          <div className="stack-list panel-scroll">
+          <div className="stack-list panel-scroll instance-list">
             {instances.map((instance) => (
               <button className={cx("instance-card", instance.id === selectedInstanceId && "active")} key={instance.id} onClick={() => setSelectedInstanceId(instance.id)}>
                 <span className="status-dot" />
@@ -2519,12 +2660,12 @@ function App() {
               <p className="eyebrow">{t.state}</p>
               <h2>{t.state}</h2>
             </div>
-            <button className="soft-button" onClick={refreshState} disabled={!selectedInstance}><Database size={16} />{t.refresh}</button>
+            <button className="soft-button" onClick={() => refreshState()} disabled={!selectedInstance}><Database size={16} />{t.refresh}</button>
           </div>
           <pre className="panel-pre">{JSON.stringify(stateSnapshot, null, 2)}</pre>
         </article>
 
-        <article className="surface runtime-panel">
+        <article className="surface runtime-panel runtime-slots-panel" aria-hidden="true">
           <div className="surface-heading">
             <div>
               <p className="eyebrow">{t.runtimePlane}</p>
@@ -2538,7 +2679,7 @@ function App() {
                 <Braces size={17} />
                 <strong>{slot.mode}</strong>
                 <span>{slot.tokenPreview}</span>
-                <small>{slot.stateCollectionCount} collections</small>
+                <small>{slot.workerKey ? `${slot.workerKey} · ` : ""}{slot.stateCollectionCount} collections</small>
               </div>
             ))}
             {runtimeSlots.length === 0 && <EmptyState icon={<Server size={28} />} text={t.emptyRuntime} compact />}
@@ -2570,7 +2711,7 @@ function App() {
               <option value="MATCHED">{t.matched}</option>
               <option value="UNMATCHED">{t.unmatched}</option>
             </select>
-            <button className="soft-button" onClick={refreshLogs} disabled={!selectedInstance}><RefreshCw size={16} />{t.refresh}</button>
+            <button className="soft-button" onClick={() => refreshLogs()} disabled={!selectedInstance}><RefreshCw size={16} />{t.refresh}</button>
           </div>
         </div>
         <div className="log-table panel-scroll logs-scroll">
@@ -2864,9 +3005,11 @@ function App() {
                   <span>{project.instanceCount} instances</span>
                   <span>{project.memberCount} members</span>
                 </div>
-                <small>Owner: {project.ownerUsername || project.ownerEmail}</small>
-                <small>ID: {project.id}</small>
-                <small>{new Date(project.createdAt).toLocaleString()}</small>
+                <div className="admin-card-description">
+                  <span><b>Owner</b><small>{project.ownerUsername || project.ownerEmail}</small></span>
+                  <span><b>ID</b><small>{project.id}</small></span>
+                  <span><b>Date</b><small>{new Date(project.createdAt).toLocaleString()}</small></span>
+                </div>
               </div>
             ))}
             {adminProjects.length === 0 && <EmptyState icon={<Layers3 size={28} />} text={t.adminProjects} compact />}
@@ -2902,9 +3045,11 @@ function App() {
                   <span>API key {instance.requireApiKey ? "on" : "off"}</span>
                   <span>{instance.tokenPreview}</span>
                 </div>
-                <small>Project: {instance.projectId}</small>
-                <small>Spec: {instance.specVersionId}</small>
-                <small>{new Date(instance.createdAt).toLocaleString()}</small>
+                <div className="admin-card-description">
+                  <span><b>Project</b><small>{instance.projectId}</small></span>
+                  <span><b>Spec</b><small>{instance.specVersionId}</small></span>
+                  <span><b>Date</b><small>{new Date(instance.createdAt).toLocaleString()}</small></span>
+                </div>
               </div>
             ))}
             {adminInstances.length === 0 && <EmptyState icon={<Server size={28} />} text={t.adminInstances} compact />}
@@ -3007,7 +3152,7 @@ function App() {
                   <Braces size={17} />
                   <strong>{slot.mode}</strong>
                   <span>{slot.tokenPreview}</span>
-                  <small>{slot.stateCollectionCount} collections</small>
+                  <small>{slot.workerKey ? `${slot.workerKey} · ` : ""}{slot.stateCollectionCount} collections</small>
                 </div>
               ))}
               <Pager

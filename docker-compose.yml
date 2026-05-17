@@ -7,21 +7,54 @@ services:
     volumes:
       - mongo-data:/data/db
 
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+
   server:
     build:
       context: ./server
     restart: unless-stopped
     depends_on:
       - mongo
+      - redis
+      - runtime
     environment:
       MONGODB_URI: mongodb://mongo:27017/msaas
       SPRING_MONGODB_URI: mongodb://mongo:27017/msaas
+      REDIS_URI: redis://redis:6379
       JWT_SECRET: replace-this-development-secret-with-at-least-32-bytes
       APP_PUBLIC_BASE_URL: http://localhost:8081
       APP_CORS_ALLOWED_ORIGINS: http://localhost:5173
       ADMIN_BOOTSTRAP_EMAIL: admin@example.com
+      APP_RUNTIME_ROLE: CONTROL
+      APP_RUNTIME_INTERNAL_SECRET: local-runtime-secret
     ports:
       - "8081:8081"
+
+  runtime:
+    build:
+      context: ./server
+    restart: unless-stopped
+    depends_on:
+      - mongo
+      - redis
+    environment:
+      SERVER_PORT: 8082
+      MONGODB_URI: mongodb://mongo:27017/msaas
+      SPRING_MONGODB_URI: mongodb://mongo:27017/msaas
+      REDIS_URI: redis://redis:6379
+      JWT_SECRET: replace-this-development-secret-with-at-least-32-bytes
+      APP_PUBLIC_BASE_URL: http://localhost:8081
+      APP_CORS_ALLOWED_ORIGINS: http://localhost:5173
+      ADMIN_BOOTSTRAP_EMAIL: admin@example.com
+      APP_RUNTIME_ROLE: RUNTIME
+      APP_RUNTIME_BASE_URL: http://runtime:8082
+      APP_RUNTIME_INTERNAL_SECRET: local-runtime-secret
+    expose:
+      - "8082"
 
   ui:
     build:

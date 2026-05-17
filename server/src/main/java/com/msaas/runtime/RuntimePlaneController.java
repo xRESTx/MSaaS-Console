@@ -2,6 +2,7 @@ package com.msaas.runtime;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -27,7 +28,10 @@ public class RuntimePlaneController {
     }
 
     @PostMapping("/workers/heartbeat")
-    public RuntimeWorkerView heartbeat(@Valid @RequestBody RuntimeHeartbeatRequest request) {
+    public RuntimeWorkerView heartbeat(@Valid @RequestBody RuntimeHeartbeatRequest request, HttpServletRequest httpRequest) {
+        if (!runtimePlaneService.internalSecretMatches(httpRequest.getHeader("X-MSaaS-Internal-Secret"))) {
+            throw com.msaas.common.ApiException.forbidden("Invalid runtime heartbeat secret");
+        }
         return RuntimeWorkerView.from(runtimePlaneService.heartbeat(
                 request.workerKey(),
                 request.baseUrl(),

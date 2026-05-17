@@ -9,6 +9,10 @@ spring:
   data:
     mongodb:
       auto-index-creation: true
+    redis:
+      url: ${REDIS_URI:redis://localhost:6379}
+      repositories:
+        enabled: false
 
 management:
   endpoints:
@@ -29,3 +33,13 @@ app:
     ttl-minutes: ${JWT_TTL_MINUTES:1440}
   admin:
     bootstrap-email: ${ADMIN_BOOTSTRAP_EMAIL:admin@example.com}
+  runtime:
+    role: ${APP_RUNTIME_ROLE:EMBEDDED}
+    worker-key: ${APP_RUNTIME_WORKER_KEY:}
+    base-url: ${APP_RUNTIME_BASE_URL:local}
+    internal-secret: ${APP_RUNTIME_INTERNAL_SECRET:local-runtime-secret}
+    stale-after-seconds: ${APP_RUNTIME_STALE_AFTER_SECONDS:30}
+    heartbeat-interval-seconds: ${APP_RUNTIME_HEARTBEAT_INTERVAL_SECONDS:5}
+    max-slots-per-worker: ${APP_RUNTIME_MAX_SLOTS_PER_WORKER:250}
+    slot-idle-ttl-seconds: ${APP_RUNTIME_SLOT_IDLE_TTL_SECONDS:1800}
+    slot-cleanup-delay-ms: ${APP_RUNTIME_SLOT_CLEANUP_DELAY_MS:60000}

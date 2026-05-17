@@ -39,6 +39,8 @@ X-Mock-Api-Key: <key-shown-once>
 - Private projects with `OWNER`, `MEMBER`, and `VIEWER` roles.
 - OpenAPI REST parsing, validation, route normalization, examples, and schema-generated responses.
 - Java warm runtime slots rather than a container per mock.
+- Runtime scale mode with separate control gateway and Java runtime workers.
+- Redis-backed stateful mock state and distributed rate limits outside worker memory.
 - Long public mock token stored as a hash in MongoDB.
 - Public URL and mock API key are shown once after publish or rotation.
 - Optional `X-Mock-Api-Key` per instance.
@@ -70,14 +72,17 @@ flowchart LR
   U["User / Browser"] --> UI["React Console"]
   UI --> API["Control API (Spring Boot)"]
   API --> DB["MongoDB"]
+  API --> REDIS["Redis"]
   API --> REG["Runtime Plane Registry"]
-  REG --> SLOT["Java Warm Slots"]
+  REG --> WORKER["Runtime Worker(s)"]
+  WORKER --> REDIS
   C["External Client"] --> MOCK["/mock/{publicToken}/**"]
-  MOCK --> SLOT
-  SLOT --> DB
+  MOCK --> API
+  API --> WORKER
+  WORKER --> DB
 ```
 
-Runtime is currently embedded in the server process, but the `RuntimePlaneService`, worker heartbeat API, and slot registry create a clear boundary for splitting `mock-runtime` into a separate service later.
+Runtime can run embedded for local development or split into a control gateway plus one or more Java runtime workers. The public mock URL stays stable while the control service proxies `/mock/{publicToken}/**` to runtime workers over an internal endpoint.
 
 ## Tech Stack
 
@@ -104,6 +109,7 @@ Infrastructure:
 
 - Docker Compose
 - MongoDB 8
+- Redis 7
 
 ## Repository Layout
 
@@ -167,10 +173,25 @@ Useful commands:
 ```powershell
 docker compose ps
 docker compose logs -f server
+docker compose logs -f runtime
 docker compose logs -f ui
 docker compose down
 docker compose down -v
 ```
+
+Scale runtime workers:
+
+```powershell
+docker compose up -d --build --scale runtime=3
+```
+
+Runtime roles are controlled by environment variables:
+
+- `APP_RUNTIME_ROLE=EMBEDDED` keeps the original single-process mode.
+- `APP_RUNTIME_ROLE=CONTROL` runs the control API and public mock gateway.
+- `APP_RUNTIME_ROLE=RUNTIME` runs an internal Java mock worker.
+- `APP_RUNTIME_INTERNAL_SECRET` secures control-to-worker calls.
+- `REDIS_URI` points runtime state and distributed rate limits to Redis.
 
 ## Run Locally
 

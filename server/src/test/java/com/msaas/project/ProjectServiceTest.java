@@ -8,10 +8,14 @@ import com.msaas.runtime.MockRuntimeRegistry;
 import com.msaas.spec.SpecVersionRepository;
 import com.msaas.user.UserRepository;
 import org.junit.jupiter.api.Test;
+import org.springframework.data.domain.Sort;
 
+import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -39,5 +43,16 @@ class ProjectServiceTest {
                 .hasMessage("Project not found");
 
         verify(repository).findById("project-1");
+    }
+
+    @Test
+    void rejectsDuplicateProjectNameForSameOwner() {
+        when(repository.findAccessibleByUserId(eq("user-1"), any(Sort.class))).thenReturn(List.of(new Project("user-1", "Demo", "")));
+
+        assertThatThrownBy(() -> service.create("user-1", " Demo ", ""))
+                .isInstanceOf(ApiException.class)
+                .hasMessage("Project name already exists for this user");
+
+        verify(repository).findAccessibleByUserId(eq("user-1"), any(Sort.class));
     }
 }

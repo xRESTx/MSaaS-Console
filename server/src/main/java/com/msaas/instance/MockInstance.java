@@ -39,6 +39,8 @@ public class MockInstance {
     private int rateLimitRequests = 120;
     private int rateLimitWindowSeconds = 60;
     private List<MockScenario> scenarios = new ArrayList<>();
+    private String workerKey;
+    private Instant assignedAt;
     private Instant createdAt;
     private Instant updatedAt;
 
@@ -226,6 +228,22 @@ public class MockInstance {
 
     public void setScenarios(List<MockScenario> scenarios) {
         this.scenarios = scenarios == null ? new ArrayList<>() : scenarios;
+    }
+
+    public String getWorkerKey() {
+        return workerKey;
+    }
+
+    public void setWorkerKey(String workerKey) {
+        this.workerKey = workerKey;
+    }
+
+    public Instant getAssignedAt() {
+        return assignedAt;
+    }
+
+    public void setAssignedAt(Instant assignedAt) {
+        this.assignedAt = assignedAt;
     }
 
     public Instant getCreatedAt() {

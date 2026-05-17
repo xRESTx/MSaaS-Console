@@ -6,6 +6,9 @@ import com.msaas.audit.AuditService;
 import com.msaas.log.RequestLogRepository;
 import com.msaas.project.ProjectService;
 import com.msaas.runtime.MockRuntimeRegistry;
+import com.msaas.runtime.MockStateStore;
+import com.msaas.runtime.RuntimePlaneService;
+import com.msaas.runtime.RuntimeSlot;
 import com.msaas.security.SecretHashService;
 import com.msaas.spec.SpecService;
 import com.msaas.spec.SpecVersion;
@@ -26,6 +29,8 @@ public class InstanceService {
     private final PublicTokenGenerator tokenGenerator;
     private final SecretHashService secretHashService;
     private final MockRuntimeRegistry runtimeRegistry;
+    private final MockStateStore stateStore;
+    private final RuntimePlaneService runtimePlaneService;
     private final AppProperties properties;
     private final RequestLogRepository requestLogRepository;
     private final AuditService auditService;
@@ -37,6 +42,8 @@ public class InstanceService {
             PublicTokenGenerator tokenGenerator,
             SecretHashService secretHashService,
             MockRuntimeRegistry runtimeRegistry,
+            MockStateStore stateStore,
+            RuntimePlaneService runtimePlaneService,
             AppProperties properties,
             RequestLogRepository requestLogRepository,
             AuditService auditService
@@ -47,6 +54,8 @@ public class InstanceService {
         this.tokenGenerator = tokenGenerator;
         this.secretHashService = secretHashService;
         this.runtimeRegistry = runtimeRegistry;
+        this.stateStore = stateStore;
+        this.runtimePlaneService = runtimePlaneService;
         this.properties = properties;
         this.requestLogRepository = requestLogRepository;
         this.auditService = auditService;
@@ -67,12 +76,14 @@ public class InstanceService {
                 apiKey == null ? null : apiKey.hash(),
                 apiKey == null ? null : apiKey.preview()
         );
+        instance.setWorkerKey(runtimePlaneService.assignWorkerKey());
+        instance.setAssignedAt(Instant.now());
         MockInstance saved = instanceRepository.save(instance);
         saved.setPublicUrl(publicUrl(publicToken.raw()));
         if (apiKey != null) {
             saved.setMockApiKey(apiKey.raw());
         }
-        runtimeRegistry.register(saved);
+        registerLocal(saved);
         auditService.record(version.getProjectId(), actorId, "INSTANCE_PUBLISHED", "mockInstance", saved.getId(), "Mock instance published");
         return saved;
     }
@@ -91,6 +102,7 @@ public class InstanceService {
 
     private void deleteInstanceData(MockInstance instance, String actorId, String action, String message) {
         runtimeRegistry.unregister(instance.getPublicTokenHash());
+        stateStore.reset(new RuntimeSlot(instance));
         requestLogRepository.deleteByInstanceId(instance.getId());
         instanceRepository.delete(instance);
         auditService.record(instance.getProjectId(), actorId, action, "mockInstance", instance.getId(), message);
@@ -123,7 +135,11 @@ public class InstanceService {
 
     public MockInstance resetState(String instanceId, String actorId) {
         MockInstance instance = requireWritableInstance(instanceId, actorId);
-        runtimeRegistry.reset(instance.getPublicTokenHash());
+        if (runtimePlaneService.localExecutionEnabled()) {
+            runtimeRegistry.reset(instance.getPublicTokenHash());
+        } else {
+            stateStore.reset(new RuntimeSlot(instance));
+        }
         instance.setUpdatedAt(Instant.now());
         MockInstance saved = instanceRepository.save(instance);
         auditService.record(instance.getProjectId(), actorId, "INSTANCE_STATE_RESET", "mockInstance", instance.getId(), "Mock instance state reset");
@@ -132,7 +148,10 @@ public class InstanceService {
 
     public Map<String, Object> state(String instanceId, String actorId) {
         MockInstance instance = requireAccessibleInstance(instanceId, actorId);
-        return runtimeRegistry.snapshot(instance.getPublicTokenHash());
+        if (runtimePlaneService.localExecutionEnabled()) {
+            return runtimeRegistry.snapshot(instance.getPublicTokenHash());
+        }
+        return stateStore.snapshot(new RuntimeSlot(instance));
     }
 
     public MockInstance rotateToken(String instanceId, String actorId) {
@@ -145,7 +164,7 @@ public class InstanceService {
         MockInstance saved = instanceRepository.save(instance);
         saved.setPublicUrl(publicUrl(publicToken.raw()));
         runtimeRegistry.unregister(oldTokenHash);
-        runtimeRegistry.register(saved);
+        registerLocal(saved);
         auditService.record(instance.getProjectId(), actorId, "INSTANCE_TOKEN_ROTATED", "mockInstance", instance.getId(), "Mock instance token rotated");
         return saved;
     }
@@ -159,7 +178,7 @@ public class InstanceService {
         instance.setUpdatedAt(Instant.now());
         MockInstance saved = instanceRepository.save(instance);
         saved.setMockApiKey(apiKey.raw());
-        runtimeRegistry.register(saved);
+        registerLocal(saved);
         auditService.record(instance.getProjectId(), actorId, "INSTANCE_API_KEY_ROTATED", "mockInstance", instance.getId(), "Mock instance API key rotated");
         return saved;
     }
@@ -171,7 +190,7 @@ public class InstanceService {
         instance.setRateLimitWindowSeconds(settings.rateLimitWindowSeconds());
         instance.setUpdatedAt(Instant.now());
         MockInstance saved = instanceRepository.save(instance);
-        runtimeRegistry.register(saved);
+        registerLocal(saved);
         auditService.record(instance.getProjectId(), actorId, "INSTANCE_SETTINGS_UPDATED", "mockInstance", instance.getId(), "Mock instance settings updated", Map.of(
                 "rateLimitEnabled", saved.isRateLimitEnabled(),
                 "rateLimitRequests", saved.getRateLimitRequests(),
@@ -245,7 +264,7 @@ public class InstanceService {
         instance.setScenarios(scenarios);
         instance.setUpdatedAt(Instant.now());
         MockInstance saved = instanceRepository.save(instance);
-        runtimeRegistry.register(saved);
+        registerLocal(saved);
         auditService.record(saved.getProjectId(), actorId, action, "mockScenario", saved.getId(), message);
     }
 
@@ -255,6 +274,12 @@ public class InstanceService {
             token = issueSecret();
         } while (instanceRepository.findByPublicTokenHashAndStatus(token.hash(), InstanceStatus.RUNNING).isPresent());
         return token;
+    }
+
+    private void registerLocal(MockInstance instance) {
+        if (runtimePlaneService.localExecutionEnabled()) {
+            runtimeRegistry.register(instance);
+        }
     }
 
     private IssuedSecret issueSecret() {

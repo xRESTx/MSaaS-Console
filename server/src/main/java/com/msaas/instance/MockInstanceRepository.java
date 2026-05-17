@@ -15,6 +15,8 @@ public interface MockInstanceRepository extends MongoRepository<MockInstance, St
 
     List<MockInstance> findByStatus(InstanceStatus status);
 
+    long countByWorkerKeyAndStatus(String workerKey, InstanceStatus status);
+
     List<MockInstance> findAllByOrderByCreatedAtDesc(Pageable pageable);
 
     List<MockInstance> findBySpecVersionIdOrderByCreatedAtDesc(String specVersionId);

@@ -1,5 +1,6 @@
 package com.msaas.config;
 
+import com.msaas.runtime.RuntimeRole;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 @ConfigurationProperties(prefix = "app")
@@ -8,6 +9,7 @@ public class AppProperties {
     private Cors cors = new Cors();
     private Jwt jwt = new Jwt();
     private Admin admin = new Admin();
+    private Runtime runtime = new Runtime();
 
     public String getPublicBaseUrl() {
         return publicBaseUrl;
@@ -39,6 +41,14 @@ public class AppProperties {
 
     public void setAdmin(Admin admin) {
         this.admin = admin;
+    }
+
+    public Runtime getRuntime() {
+        return runtime;
+    }
+
+    public void setRuntime(Runtime runtime) {
+        this.runtime = runtime;
     }
 
     public static class Cors {
@@ -83,6 +93,102 @@ public class AppProperties {
 
         public void setBootstrapEmail(String bootstrapEmail) {
             this.bootstrapEmail = bootstrapEmail;
+        }
+    }
+
+    public static class Runtime {
+        private RuntimeRole role = RuntimeRole.EMBEDDED;
+        private String workerKey;
+        private String baseUrl = "local";
+        private String internalSecret = "local-runtime-secret";
+        private long staleAfterSeconds = 30;
+        private long heartbeatIntervalSeconds = 5;
+        private int maxSlotsPerWorker = 250;
+        private long slotIdleTtlSeconds = 1800;
+        private long slotCleanupDelayMs = 60000;
+
+        public RuntimeRole getRole() {
+            return role == null ? RuntimeRole.EMBEDDED : role;
+        }
+
+        public void setRole(RuntimeRole role) {
+            this.role = role;
+        }
+
+        public String getWorkerKey() {
+            return workerKey;
+        }
+
+        public void setWorkerKey(String workerKey) {
+            this.workerKey = workerKey;
+        }
+
+        public String getBaseUrl() {
+            return baseUrl;
+        }
+
+        public void setBaseUrl(String baseUrl) {
+            this.baseUrl = baseUrl;
+        }
+
+        public String getInternalSecret() {
+            return internalSecret;
+        }
+
+        public void setInternalSecret(String internalSecret) {
+            this.internalSecret = internalSecret;
+        }
+
+        public long getStaleAfterSeconds() {
+            return staleAfterSeconds <= 0 ? 30 : staleAfterSeconds;
+        }
+
+        public void setStaleAfterSeconds(long staleAfterSeconds) {
+            this.staleAfterSeconds = staleAfterSeconds;
+        }
+
+        public long getHeartbeatIntervalSeconds() {
+            return heartbeatIntervalSeconds <= 0 ? 5 : heartbeatIntervalSeconds;
+        }
+
+        public void setHeartbeatIntervalSeconds(long heartbeatIntervalSeconds) {
+            this.heartbeatIntervalSeconds = heartbeatIntervalSeconds;
+        }
+
+        public int getMaxSlotsPerWorker() {
+            return maxSlotsPerWorker <= 0 ? 250 : maxSlotsPerWorker;
+        }
+
+        public void setMaxSlotsPerWorker(int maxSlotsPerWorker) {
+            this.maxSlotsPerWorker = maxSlotsPerWorker;
+        }
+
+        public long getSlotIdleTtlSeconds() {
+            return slotIdleTtlSeconds <= 0 ? 1800 : slotIdleTtlSeconds;
+        }
+
+        public void setSlotIdleTtlSeconds(long slotIdleTtlSeconds) {
+            this.slotIdleTtlSeconds = slotIdleTtlSeconds;
+        }
+
+        public long getSlotCleanupDelayMs() {
+            return slotCleanupDelayMs <= 0 ? 60000 : slotCleanupDelayMs;
+        }
+
+        public void setSlotCleanupDelayMs(long slotCleanupDelayMs) {
+            this.slotCleanupDelayMs = slotCleanupDelayMs;
+        }
+
+        public boolean isEmbedded() {
+            return getRole() == RuntimeRole.EMBEDDED;
+        }
+
+        public boolean isControl() {
+            return getRole() == RuntimeRole.CONTROL;
+        }
+
+        public boolean isRuntime() {
+            return getRole() == RuntimeRole.RUNTIME;
         }
     }
 }

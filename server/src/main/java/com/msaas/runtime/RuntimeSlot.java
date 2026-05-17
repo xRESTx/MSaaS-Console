@@ -12,12 +12,15 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 public class RuntimeSlot {
     private final String instanceId;
     private final String projectId;
     private final String publicTokenHash;
     private final String publicTokenPreview;
+    private final String workerKey;
     private final boolean requireApiKey;
     private final String apiKeyHash;
     private final InstanceMode mode;
@@ -27,6 +30,9 @@ public class RuntimeSlot {
     private final int rateLimitWindowSeconds;
     private final List<MockScenario> scenarios;
     private final Instant loadedAt;
+    private final Instant instanceUpdatedAt;
+    private final AtomicReference<Instant> lastAccessedAt;
+    private final AtomicInteger activeRequests = new AtomicInteger();
     private final ConcurrentMap<String, ConcurrentMap<String, Object>> state = new ConcurrentHashMap<>();
 
     public RuntimeSlot(MockInstance instance) {
@@ -34,6 +40,7 @@ public class RuntimeSlot {
         this.projectId = instance.getProjectId();
         this.publicTokenHash = instance.getPublicTokenHash();
         this.publicTokenPreview = instance.getPublicTokenPreview();
+        this.workerKey = instance.getWorkerKey();
         this.requireApiKey = instance.isRequireApiKey();
         this.apiKeyHash = instance.getApiKeyHash();
         this.mode = instance.getMode();
@@ -43,6 +50,8 @@ public class RuntimeSlot {
         this.rateLimitWindowSeconds = instance.getRateLimitWindowSeconds();
         this.scenarios = new ArrayList<>(instance.getScenarios());
         this.loadedAt = Instant.now();
+        this.lastAccessedAt = new AtomicReference<>(loadedAt);
+        this.instanceUpdatedAt = instance.getUpdatedAt();
     }
 
     public String getInstanceId() {
@@ -59,6 +68,10 @@ public class RuntimeSlot {
 
     public String getPublicTokenPreview() {
         return publicTokenPreview;
+    }
+
+    public String getWorkerKey() {
+        return workerKey;
     }
 
     public boolean isRequireApiKey() {
@@ -95,6 +108,44 @@ public class RuntimeSlot {
 
     public Instant getLoadedAt() {
         return loadedAt;
+    }
+
+    public Instant getLastAccessedAt() {
+        return lastAccessedAt.get();
+    }
+
+    public int getActiveRequests() {
+        return activeRequests.get();
+    }
+
+    public void touch() {
+        lastAccessedAt.set(Instant.now());
+    }
+
+    public void beginRequest() {
+        activeRequests.incrementAndGet();
+        touch();
+    }
+
+    public void endRequest() {
+        activeRequests.updateAndGet(current -> Math.max(0, current - 1));
+        touch();
+    }
+
+    public boolean isEvictable() {
+        return activeRequests.get() == 0;
+    }
+
+    public boolean isIdleExpired(Instant now, long ttlSeconds) {
+        return isEvictable() && getLastAccessedAt().plusSeconds(ttlSeconds).isBefore(now);
+    }
+
+    void setLastAccessedAt(Instant lastAccessedAt) {
+        this.lastAccessedAt.set(lastAccessedAt);
+    }
+
+    public Instant getInstanceUpdatedAt() {
+        return instanceUpdatedAt;
     }
 
     public ConcurrentMap<String, Object> collection(String key) {

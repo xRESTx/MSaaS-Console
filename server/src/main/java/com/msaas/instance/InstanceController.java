@@ -120,10 +120,10 @@ public class InstanceController {
     public List<RequestLogView> logs(
             @AuthenticationPrincipal AuthenticatedUser user,
             @PathVariable String instanceId,
-            @RequestParam(defaultValue = "50") int limit
+            @RequestParam(defaultValue = "200") int limit
     ) {
         MockInstance instance = instanceService.requireAccessibleInstance(instanceId, user.id());
-        int boundedLimit = Math.max(1, Math.min(limit, 200));
+        int boundedLimit = Math.max(1, Math.min(limit, 1000));
         return requestLogRepository.findByInstanceIdOrderByReceivedAtDesc(instance.getId(), PageRequest.of(0, boundedLimit))
                 .stream()
                 .map(RequestLogView::from)
@@ -149,6 +149,8 @@ public class InstanceController {
             int rateLimitRequests,
             int rateLimitWindowSeconds,
             int scenarioCount,
+            String workerKey,
+            Instant assignedAt,
             Instant createdAt,
             Instant updatedAt
     ) {
@@ -170,6 +172,8 @@ public class InstanceController {
                     instance.getRateLimitRequests(),
                     instance.getRateLimitWindowSeconds(),
                     instance.getScenarios().size(),
+                    instance.getWorkerKey(),
+                    instance.getAssignedAt(),
                     instance.getCreatedAt(),
                     instance.getUpdatedAt()
             );

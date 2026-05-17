@@ -46,6 +46,9 @@ public class MockRuntimeController {
     private final LogRedactor logRedactor;
     private final MockRateLimiter rateLimiter;
     private final TemplateRenderer templateRenderer;
+    private final MockStateStore stateStore;
+    private final RuntimePlaneService runtimePlaneService;
+    private final MockGatewayService gatewayService;
 
     public MockRuntimeController(
             MockRuntimeRegistry registry,
@@ -55,7 +58,10 @@ public class MockRuntimeController {
             SecretHashService secretHashService,
             LogRedactor logRedactor,
             MockRateLimiter rateLimiter,
-            TemplateRenderer templateRenderer
+            TemplateRenderer templateRenderer,
+            MockStateStore stateStore,
+            RuntimePlaneService runtimePlaneService,
+            MockGatewayService gatewayService
     ) {
         this.registry = registry;
         this.routeMatcher = routeMatcher;
@@ -65,21 +71,50 @@ public class MockRuntimeController {
         this.logRedactor = logRedactor;
         this.rateLimiter = rateLimiter;
         this.templateRenderer = templateRenderer;
+        this.stateStore = stateStore;
+        this.runtimePlaneService = runtimePlaneService;
+        this.gatewayService = gatewayService;
     }
 
     @RequestMapping("/mock/{token}/**")
-    public ResponseEntity<Object> handle(
+    public ResponseEntity<?> handle(
             @PathVariable String token,
             HttpServletRequest request,
             @RequestBody(required = false) String requestBody
     ) {
+        if (runtimePlaneService.gatewayEnabled()) {
+            return gatewayService.proxy(token, request, requestBody);
+        }
+        if (!runtimePlaneService.localExecutionEnabled()) {
+            return ResponseEntity.status(404).body(Map.of("error", "Mock runtime is not available on this node"));
+        }
+        return execute(token, request, requestBody, "/mock/" + token);
+    }
+
+    @RequestMapping("/internal/runtime/mock/{token}/**")
+    public ResponseEntity<?> handleInternal(
+            @PathVariable String token,
+            HttpServletRequest request,
+            @RequestBody(required = false) String requestBody
+    ) {
+        if (!runtimePlaneService.internalSecretMatches(request.getHeader("X-MSaaS-Internal-Secret"))) {
+            return ResponseEntity.status(403).body(Map.of("error", "Invalid internal runtime secret"));
+        }
+        if (!runtimePlaneService.localExecutionEnabled()) {
+            return ResponseEntity.status(404).body(Map.of("error", "Mock runtime is not available on this node"));
+        }
+        return execute(token, request, requestBody, "/internal/runtime/mock/" + token);
+    }
+
+    private ResponseEntity<Object> execute(String token, HttpServletRequest request, String requestBody, String pathPrefix) {
         Optional<RuntimeSlot> maybeSlot = registry.findByToken(token);
         if (maybeSlot.isEmpty()) {
             return ResponseEntity.status(404).body(Map.of("error", "Mock instance not found"));
         }
 
         RuntimeSlot slot = maybeSlot.get();
-        String mockPath = mockPath(token, request);
+        slot.beginRequest();
+        String mockPath = mockPath(pathPrefix, request);
         Instant startedAt = Instant.now();
         RequestLog log = new RequestLog(slot.getProjectId(), slot.getInstanceId(), request.getMethod(), mockPath, logRedactor.redactQueryString(request.getQueryString()));
         log.setRequestHeaders(logRedactor.redactHeaders(request));
@@ -131,10 +166,14 @@ public class MockRuntimeController {
             }
             return response;
         } finally {
-            int status = response == null ? 500 : response.getStatusCode().value();
-            log.setResponseStatus(status);
-            log.setLatencyMs(Duration.between(startedAt, Instant.now()).toMillis());
-            requestLogRepository.save(log);
+            try {
+                int status = response == null ? 500 : response.getStatusCode().value();
+                log.setResponseStatus(status);
+                log.setLatencyMs(Duration.between(startedAt, Instant.now()).toMillis());
+                requestLogRepository.save(log);
+            } finally {
+                slot.endRequest();
+            }
         }
     }
 
@@ -214,38 +253,37 @@ public class MockRuntimeController {
         MockRoute route = match.route();
         String upperMethod = method.toUpperCase(Locale.ROOT);
         String collectionKey = collectionKey(route.getPathTemplate());
-        ConcurrentMap<String, Object> collection = slot.collection(collectionKey);
         Optional<String> maybeId = resourceId(match);
 
         if ("POST".equals(upperMethod) && maybeId.isEmpty()) {
             Map<String, Object> item = objectBodyOrDefault(requestBody, route.defaultResponse().getBody());
             String id = String.valueOf(item.getOrDefault("id", UUID.randomUUID().toString()));
             item.putIfAbsent("id", id);
-            collection.put(id, item);
+            stateStore.put(slot, collectionKey, id, item);
             return Optional.of(responseWithBody(route, directive.statusCode().orElse(201), item, match, requestBody, queryParameters, headers, directive));
         }
 
         if ("GET".equals(upperMethod) && maybeId.isPresent()) {
-            Object item = collection.get(maybeId.get());
+            Object item = stateStore.get(slot, collectionKey, maybeId.get());
             if (item != null) {
                 return Optional.of(responseWithBody(route, directive.statusCode().orElse(200), item, match, requestBody, queryParameters, headers, directive));
             }
             return Optional.empty();
         }
 
-        if ("GET".equals(upperMethod) && maybeId.isEmpty() && !collection.isEmpty()) {
-            return Optional.of(responseWithBody(route, directive.statusCode().orElse(200), new ArrayList<>(collection.values()), match, requestBody, queryParameters, headers, directive));
+        if ("GET".equals(upperMethod) && maybeId.isEmpty() && !stateStore.isEmpty(slot, collectionKey)) {
+            return Optional.of(responseWithBody(route, directive.statusCode().orElse(200), stateStore.values(slot, collectionKey), match, requestBody, queryParameters, headers, directive));
         }
 
         if (("PUT".equals(upperMethod) || "PATCH".equals(upperMethod)) && maybeId.isPresent()) {
             Map<String, Object> item = objectBodyOrDefault(requestBody, route.defaultResponse().getBody());
             item.putIfAbsent("id", maybeId.get());
-            collection.put(maybeId.get(), item);
+            stateStore.put(slot, collectionKey, maybeId.get(), item);
             return Optional.of(responseWithBody(route, directive.statusCode().orElse(200), item, match, requestBody, queryParameters, headers, directive));
         }
 
         if ("DELETE".equals(upperMethod) && maybeId.isPresent()) {
-            collection.remove(maybeId.get());
+            stateStore.remove(slot, collectionKey, maybeId.get());
             MockResponseDefinition definition = preferredResponse(route, directive.statusCode().orElse(204));
             if (definition.getStatusCode() == 204 || definition.getBody() == null) {
                 delay(effectiveDelayMs(definition, directive));
@@ -410,9 +448,8 @@ public class MockRuntimeController {
         return new ArrayList<>(List.of(normalized.split("/")));
     }
 
-    private String mockPath(String token, HttpServletRequest request) {
+    private String mockPath(String prefix, HttpServletRequest request) {
         String uri = request.getRequestURI();
-        String prefix = "/mock/" + token;
         String path = uri.length() <= prefix.length() ? "/" : uri.substring(prefix.length());
         return path.isBlank() ? "/" : path;
     }

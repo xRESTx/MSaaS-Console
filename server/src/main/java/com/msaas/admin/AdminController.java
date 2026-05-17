@@ -135,8 +135,8 @@ public class AdminController {
     }
 
     @GetMapping("/instances")
-    public List<AdminInstanceView> instances(@RequestParam(defaultValue = "100") int limit) {
-        int boundedLimit = Math.max(1, Math.min(limit, 300));
+    public List<AdminInstanceView> instances(@RequestParam(defaultValue = "500") int limit) {
+        int boundedLimit = Math.max(1, Math.min(limit, 1000));
         return instanceRepository.findAllByOrderByCreatedAtDesc(PageRequest.of(0, boundedLimit))
                 .stream()
                 .map(AdminInstanceView::from)
