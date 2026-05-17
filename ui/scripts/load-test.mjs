@@ -206,11 +206,13 @@ async function createProjectContext(user) {
   const stateful = await publishInstance(user, version.body.id, "STATEFUL", false, "stateful");
   const protectedInstance = await publishInstance(user, version.body.id, "STATELESS", true, "protected");
   const limited = await publishInstance(user, version.body.id, "STATELESS", false, "limited");
+  const faulted = await publishInstance(user, version.body.id, "STATELESS", false, "faulted");
 
   await setRateLimit(user, scenario.body.id, config.highRateLimit, 60);
   await setRateLimit(user, stateful.body.id, config.highRateLimit, 60);
   await setRateLimit(user, protectedInstance.body.id, config.highRateLimit, 60);
   await setRateLimit(user, limited.body.id, config.lowRateLimit, config.lowRateWindowSeconds);
+  await setRateLimit(user, faulted.body.id, config.highRateLimit, 60);
 
   await request(`/api/instances/${scenario.body.id}/scenarios`, {
     method: "POST",
@@ -235,6 +237,40 @@ async function createProjectContext(user) {
     }
   });
 
+  await request(`/api/instances/${protectedInstance.body.id}/response-rules`, {
+    method: "POST",
+    token: user.token,
+    label: `create response rule ${user.index}`,
+    body: {
+      name: `Load response rule ${user.index}`,
+      enabled: true,
+      priority: 250,
+      operationId: "getOrder",
+      fieldPath: "route",
+      type: "FIXED",
+      fixedValue: "rule"
+    }
+  });
+
+  const faultProfile = await request(`/api/instances/${faulted.body.id}/profiles`, {
+    method: "POST",
+    token: user.token,
+    label: `create fault profile ${user.index}`,
+    body: {
+      name: `fault-${user.index}`,
+      faultProfileEnabled: true,
+      faultErrorRate: 100,
+      faultStatusCode: 503,
+      latencyMinMs: 0,
+      latencyMaxMs: 0
+    }
+  });
+  await request(`/api/instances/${faulted.body.id}/profiles/${faultProfile.body.id}/activate`, {
+    method: "POST",
+    token: user.token,
+    label: `activate fault profile ${user.index}`
+  });
+
   return {
     user,
     project: project.body,
@@ -242,7 +278,8 @@ async function createProjectContext(user) {
     scenario: scenario.body,
     stateful: stateful.body,
     protectedInstance: protectedInstance.body,
-    limited: limited.body
+    limited: limited.body,
+    faulted: faulted.body
   };
 }
 
@@ -309,6 +346,25 @@ async function verifyLogs(ctx) {
     label: `logs ${ctx.user.index}`
   });
   assert(logs.body.some((log) => log.error === "Rate limit exceeded"), "Rate limit event must be written to logs");
+  const protectedLogs = await request(`/api/instances/${ctx.protectedInstance.id}/logs?limit=100`, {
+    token: ctx.user.token,
+    label: `protected logs ${ctx.user.index}`
+  });
+  assert(protectedLogs.body.some((log) => log.responseSource === "RESPONSE_RULE"), "Response rule source must be written to logs");
+  const faultLogs = await request(`/api/instances/${ctx.faulted.id}/logs?limit=50`, {
+    token: ctx.user.token,
+    label: `fault logs ${ctx.user.index}`
+  });
+  assert(faultLogs.body.some((log) => log.profileName === `fault-${ctx.user.index}` && log.error === "Fault profile injected"), "Fault profile event must be written to logs");
+}
+
+async function verifyFaultProfile(ctx) {
+  const fault = await request(`${ctx.faulted.publicUrl}/orders?tenant=fault-${ctx.user.index}`, {
+    headers: { "X-Forwarded-For": `10.88.${ctx.user.index}.1` },
+    expectStatus: 503,
+    label: `fault profile ${ctx.user.index}`
+  });
+  assert(fault.body.profile === `fault-${ctx.user.index}`, "Fault response must include active profile", fault.body);
 }
 
 function buildTasks(contexts) {
@@ -319,7 +375,7 @@ function buildTasks(contexts) {
         const tenant = `tenant-${ctx.user.index}-${i}`;
         const trace = `trace-${ctx.user.index}-${i}`;
         const ip = `10.${ctx.user.index}.${Math.floor(i / 200)}.${(i % 200) + 20}`;
-        const lane = i % 6;
+        const lane = i % 7;
 
         if (lane === 0) {
           const result = await request(`${ctx.scenario.publicUrl}/orders?tenant=${encodeURIComponent(tenant)}`, {
@@ -390,17 +446,30 @@ function buildTasks(contexts) {
           return;
         }
 
-        const text = await request(`${ctx.protectedInstance.publicUrl}/orders?tenant=${encodeURIComponent(tenant)}`, {
+        if (lane === 5) {
+          const text = await request(`${ctx.protectedInstance.publicUrl}/orders?tenant=${encodeURIComponent(tenant)}`, {
+            headers: {
+              "X-Forwarded-For": ip,
+              "X-Mock-Api-Key": ctx.protectedInstance.mockApiKey,
+              "Accept": "text/plain"
+            },
+            expectStatus: 200,
+            label: `accept text ${ctx.user.index}/${i}`
+          });
+          assert(text.response.headers.get("content-type")?.includes("text/plain"), "Accept text/plain must select text content", text.text);
+          assert(text.text.includes(tenant), "Text/plain response must render query template", text.text);
+          return;
+        }
+
+        const ruled = await request(`${ctx.protectedInstance.publicUrl}/orders/${encodeURIComponent(`rule-${i}`)}`, {
           headers: {
             "X-Forwarded-For": ip,
-            "X-Mock-Api-Key": ctx.protectedInstance.mockApiKey,
-            "Accept": "text/plain"
+            "X-Mock-Api-Key": ctx.protectedInstance.mockApiKey
           },
           expectStatus: 200,
-          label: `accept text ${ctx.user.index}/${i}`
+          label: `response rule ${ctx.user.index}/${i}`
         });
-        assert(text.response.headers.get("content-type")?.includes("text/plain"), "Accept text/plain must select text content", text.text);
-        assert(text.text.includes(tenant), "Text/plain response must render query template", text.text);
+        assert(ruled.body.route === "rule", "Response rule must override body field", ruled.body);
       });
     }
   }
@@ -453,6 +522,7 @@ const contexts = await Promise.all(users.map(createProjectContext));
 
 await verifyAccessIsolation(contexts);
 await Promise.all(contexts.map(verifyLowRateLimit));
+await Promise.all(contexts.map(verifyFaultProfile));
 
 const tasks = buildTasks(contexts);
 await runPool(tasks, config.concurrency);
@@ -461,6 +531,6 @@ await Promise.all(contexts.map(verifyLogs));
 
 const totalRequests = latencies.length;
 console.log("MSaaS load test passed");
-console.log(`requests=${totalRequests} users=${config.users} projects=${contexts.length} instances=${contexts.length * 4}`);
+console.log(`requests=${totalRequests} users=${config.users} projects=${contexts.length} instances=${contexts.length * 5}`);
 console.log(`latencyMs p50=${percentile(latencies, 50)} p95=${percentile(latencies, 95)} p99=${percentile(latencies, 99)}`);
 console.log(`statuses ${statusSummary()}`);

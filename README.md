@@ -47,6 +47,12 @@ X-Mock-Api-Key: <key-shown-once>
 - Per-instance rate limits with `429` and `Retry-After`.
 - Scenario overrides for published mock instances.
 - Safe response templates such as `{{path.id}}`, `{{query.name}}`, `{{body.field}}`, `{{uuid}}`, and `{{now}}`.
+- Deterministic schema-based smart JSON responses when an OpenAPI response has a schema but no explicit example.
+- Per-instance response rules for fixed values, random integer ranges, enum choices, and template strings.
+- Response preview for route/status/content-type/example/seed checks before calling a mock.
+- Environment profiles per instance (`dev`, `qa`, `demo`, and custom profiles) with fast switching without changing the public mock URL.
+- Fault profiles with configurable `4xx/5xx` percentage and min/max latency jitter.
+- Request logs record the response source: scenario, response rule, OpenAPI example, schema generation, stateful CRUD, or fallback.
 - Response status override with `__status` or `X-Mock-Status`.
 - Named OpenAPI response example selection with `__example` or `X-Mock-Example`.
 - `Accept`-aware response content negotiation when an OpenAPI response declares multiple content types.
@@ -58,7 +64,7 @@ X-Mock-Api-Key: <key-shown-once>
 - Audit log for project/spec/instance/member changes.
 - Runtime worker registry and slot introspection endpoints.
 - Unique usernames for day-to-day collaboration; email is used for registration and recovery-style identity.
-- Admin console for platform summary, users, projects, instances, paginated logs, paginated audit, and runtime health.
+- Admin console for platform summary, users, projects, instances, paginated logs, paginated audit, runtime health, rate-limit events, and unmatched ratio.
 - Admin user management: promote/revoke admins, disable/enable users, and delete users with confirmation.
 - Admin deletion for projects and mock instances with the same runtime/log cleanup as normal project flows.
 - Bootstrap admin account by email through `ADMIN_BOOTSTRAP_EMAIL`.
@@ -153,6 +159,8 @@ cd D:\MSaaS
 docker compose up -d --build
 ```
 
+Use `.env.example` as the reference for local variables if you run services outside Compose or want to document deployment defaults.
+
 Open:
 
 - UI: http://localhost:5173
@@ -240,6 +248,7 @@ Specs:
 - `GET /api/projects/{projectId}/spec-versions`
 - `DELETE /api/spec-versions/{versionId}`
 - `GET /api/spec-versions/{versionId}/routes`
+- `POST /api/spec-versions/{versionId}/response-preview`
 
 Instances:
 
@@ -257,6 +266,15 @@ Instances:
 - `POST /api/instances/{instanceId}/scenarios`
 - `PATCH /api/instances/{instanceId}/scenarios/{scenarioId}`
 - `DELETE /api/instances/{instanceId}/scenarios/{scenarioId}`
+- `GET /api/instances/{instanceId}/response-rules`
+- `POST /api/instances/{instanceId}/response-rules`
+- `PATCH /api/instances/{instanceId}/response-rules/{ruleId}`
+- `DELETE /api/instances/{instanceId}/response-rules/{ruleId}`
+- `GET /api/instances/{instanceId}/profiles`
+- `POST /api/instances/{instanceId}/profiles`
+- `PATCH /api/instances/{instanceId}/profiles/{profileId}`
+- `DELETE /api/instances/{instanceId}/profiles/{profileId}`
+- `POST /api/instances/{instanceId}/profiles/{profileId}/activate`
 
 Runtime:
 
@@ -287,7 +305,7 @@ Admin:
 
 The Admin section is visible only to users with `systemRole=ADMIN`. It is meant for platform-level operations, not project collaboration:
 
-- Platform summary: users, projects, spec versions, instances, logs, unmatched requests, server errors, and average mock latency.
+- Platform summary: users, projects, spec versions, instances, logs, runtime workers/slots, rate-limit events, unmatched requests, unmatched ratio, server errors, and average mock latency.
 - User management: search by email or username, see owned project count, promote/revoke admin role, disable/re-enable, and delete accounts.
 - Project overview: owner email, members, spec count, instance count, and update timestamps.
 - Instance overview: status, mode, route count, token preview, API key protection, and timestamps.
@@ -317,6 +335,35 @@ Invoke-RestMethod "$mock/orders" `
   -Headers @{ "X-Mock-Status" = "200"; "X-Mock-Delay-Ms" = "250" }
 ```
 
+Generate a deterministic schema-based response:
+
+```powershell
+Invoke-RestMethod "$mock/orders/123?__seed=demo"
+```
+
+Or use a header:
+
+```powershell
+Invoke-RestMethod "$mock/orders/123" `
+  -Headers @{ "X-Mock-Seed" = "demo" }
+```
+
+Environment profiles let you switch runtime behavior without rotating the public URL:
+
+```powershell
+# Example settings body for PATCH /api/instances/{instanceId}/settings
+@{
+  activeProfile = "qa"
+  faultProfileEnabled = $true
+  faultErrorRate = 15
+  faultStatusCode = 503
+  latencyMinMs = 150
+  latencyMaxMs = 600
+}
+```
+
+Request logs include `responseSource`, `profileName`, and `appliedRuleIds`, so a demo can show exactly why a response was returned.
+
 Use a protected mock instance:
 
 ```powershell
@@ -341,6 +388,7 @@ Invoke-WebRequest "$mock/orders/$($order.id)" -Method Delete
 - `docs/demo-openapi.yaml` is a small OpenAPI contract for the console.
 - `docs/msaas-smoke.http` is an HTTP-client style checklist for auth, project creation, publish, mock calls, logs, state, and runtime workers.
 - `docs/smoke.ps1` runs an end-to-end PowerShell smoke test against a running local stack.
+- `docs/release-1-demo-checklist.md` is the release demo script for Smart Responses, profiles, logs, and admin health.
 
 Run the PowerShell smoke test:
 
@@ -366,8 +414,8 @@ cd D:\MSaaS\ui
 npm run test:load
 ```
 
-The load script creates unique users, private projects, OpenAPI specs, and four mock instances per user:
-scenario, stateful, API-key protected, and low-rate-limit. It then sends parallel mock requests and verifies project isolation, scenario templates, named examples, `Accept` content negotiation, API-key rejection, stateful CRUD, exact route priority, `429` + `Retry-After`, and rate-limit log records.
+The load script creates unique users, private projects, OpenAPI specs, and five mock instances per user:
+scenario, stateful, API-key protected, low-rate-limit, and fault-profile. It then sends parallel mock requests and verifies project isolation, scenario templates, response rules, named examples, `Accept` content negotiation, API-key rejection, stateful CRUD, exact route priority, `429` + `Retry-After`, fault profile injection, and observable log records.
 
 You can tune it with environment variables:
 
@@ -419,7 +467,7 @@ docker compose up -d --build
 ```powershell
 cd D:\MSaaS
 git add .
-git commit -m "feat: upgrade MSaaS toward production-ready v2"
+git commit -m "feat: prepare MSaaS OpenAPI release 1.0"
 git branch -M main
 git remote add origin <PASTE_YOUR_REPOSITORY_URL_HERE>
 git push -u origin main
@@ -435,16 +483,16 @@ git push -u origin main
 Recommended commit body:
 
 ```text
-Add project roles, audit logs, hashed mock tokens, optional mock API keys,
-richer OpenAPI route matching, runtime state snapshots, runtime plane
-introspection, Swagger UI, integration-test scaffolding, demo assets,
-and a redesigned responsive React console.
+Stabilize the OpenAPI-first mock platform with smart schema responses,
+response scenarios, field rules, environment/fault profiles, observable
+response sources in logs, runtime worker health, release smoke tests,
+load checks, and demo-ready documentation.
 ```
 
 ## Roadmap
 
-- Split `mock-runtime` into a separately deployable worker service.
-- Add Redis or Mongo-backed distributed runtime state.
-- Add custom response transformers and a sandboxed extension model.
-- Add GraphQL mocks.
-- Add billing/quotas, rate limits, and organization workspaces.
+- Production auth hardening: email verification, password reset, optional SSO, and refresh tokens.
+- Organization workspaces, invitations, quotas, and billing-ready usage accounting.
+- Sandboxed custom response transformers after the safe template/rule model is mature.
+- Persistent multi-worker runtime state compaction and advanced slot autoscaling policies.
+- GraphQL mocks after OpenAPI Release 1.0 is stable.

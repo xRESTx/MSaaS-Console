@@ -79,8 +79,91 @@ public class InstanceController {
         return InstanceView.from(instanceService.updateSettings(instanceId, user.id(), new InstanceService.InstanceSettings(
                 request.rateLimitEnabled(),
                 request.rateLimitRequests(),
-                request.rateLimitWindowSeconds()
+                request.rateLimitWindowSeconds(),
+                request.smartResponsesEnabled(),
+                request.smartSeedMode(),
+                request.faultProfileEnabled(),
+                request.faultErrorRate(),
+                request.faultStatusCode(),
+                request.latencyMinMs(),
+                request.latencyMaxMs(),
+                request.activeProfile()
         )));
+    }
+
+    @GetMapping("/instances/{instanceId}/profiles")
+    public List<ProfileView> profiles(@AuthenticationPrincipal AuthenticatedUser user, @PathVariable String instanceId) {
+        return instanceService.listProfiles(instanceId, user.id()).stream().map(ProfileView::from).toList();
+    }
+
+    @PostMapping("/instances/{instanceId}/profiles")
+    public ProfileView createProfile(
+            @AuthenticationPrincipal AuthenticatedUser user,
+            @PathVariable String instanceId,
+            @RequestBody ProfileRequest request
+    ) {
+        return ProfileView.from(instanceService.createProfile(instanceId, user.id(), request.toServiceRequest()));
+    }
+
+    @PatchMapping("/instances/{instanceId}/profiles/{profileId}")
+    public ProfileView updateProfile(
+            @AuthenticationPrincipal AuthenticatedUser user,
+            @PathVariable String instanceId,
+            @PathVariable String profileId,
+            @RequestBody ProfileRequest request
+    ) {
+        return ProfileView.from(instanceService.updateProfile(instanceId, profileId, user.id(), request.toServiceRequest()));
+    }
+
+    @DeleteMapping("/instances/{instanceId}/profiles/{profileId}")
+    public void deleteProfile(
+            @AuthenticationPrincipal AuthenticatedUser user,
+            @PathVariable String instanceId,
+            @PathVariable String profileId
+    ) {
+        instanceService.deleteProfile(instanceId, profileId, user.id());
+    }
+
+    @PostMapping("/instances/{instanceId}/profiles/{profileId}/activate")
+    public InstanceView activateProfile(
+            @AuthenticationPrincipal AuthenticatedUser user,
+            @PathVariable String instanceId,
+            @PathVariable String profileId
+    ) {
+        return InstanceView.from(instanceService.activateProfile(instanceId, profileId, user.id()));
+    }
+
+    @GetMapping("/instances/{instanceId}/response-rules")
+    public List<ResponseRuleView> responseRules(@AuthenticationPrincipal AuthenticatedUser user, @PathVariable String instanceId) {
+        return instanceService.listResponseRules(instanceId, user.id()).stream().map(ResponseRuleView::from).toList();
+    }
+
+    @PostMapping("/instances/{instanceId}/response-rules")
+    public ResponseRuleView createResponseRule(
+            @AuthenticationPrincipal AuthenticatedUser user,
+            @PathVariable String instanceId,
+            @RequestBody ResponseRuleRequest request
+    ) {
+        return ResponseRuleView.from(instanceService.createResponseRule(instanceId, user.id(), request.toServiceRequest()));
+    }
+
+    @PatchMapping("/instances/{instanceId}/response-rules/{ruleId}")
+    public ResponseRuleView updateResponseRule(
+            @AuthenticationPrincipal AuthenticatedUser user,
+            @PathVariable String instanceId,
+            @PathVariable String ruleId,
+            @RequestBody ResponseRuleRequest request
+    ) {
+        return ResponseRuleView.from(instanceService.updateResponseRule(instanceId, ruleId, user.id(), request.toServiceRequest()));
+    }
+
+    @DeleteMapping("/instances/{instanceId}/response-rules/{ruleId}")
+    public void deleteResponseRule(
+            @AuthenticationPrincipal AuthenticatedUser user,
+            @PathVariable String instanceId,
+            @PathVariable String ruleId
+    ) {
+        instanceService.deleteResponseRule(instanceId, ruleId, user.id());
     }
 
     @GetMapping("/instances/{instanceId}/scenarios")
@@ -145,10 +228,21 @@ public class InstanceController {
             InstanceMode mode,
             InstanceStatus status,
             int routeCount,
-            boolean rateLimitEnabled,
-            int rateLimitRequests,
-            int rateLimitWindowSeconds,
+            Boolean rateLimitEnabled,
+            Integer rateLimitRequests,
+            Integer rateLimitWindowSeconds,
+            boolean smartResponsesEnabled,
+            String smartSeedMode,
             int scenarioCount,
+            int responseRuleCount,
+            boolean faultProfileEnabled,
+            int faultErrorRate,
+            int faultStatusCode,
+            int latencyMinMs,
+            int latencyMaxMs,
+            String activeProfile,
+            String activeProfileName,
+            int profileCount,
             String workerKey,
             Instant assignedAt,
             Instant createdAt,
@@ -171,7 +265,18 @@ public class InstanceController {
                     instance.isRateLimitEnabled(),
                     instance.getRateLimitRequests(),
                     instance.getRateLimitWindowSeconds(),
+                    instance.isSmartResponsesEnabled(),
+                    instance.getSmartSeedMode(),
                     instance.getScenarios().size(),
+                    instance.getResponseRules().size(),
+                    instance.isFaultProfileEnabled(),
+                    instance.getFaultErrorRate(),
+                    instance.getFaultStatusCode(),
+                    instance.getLatencyMinMs(),
+                    instance.getLatencyMaxMs(),
+                    instance.getActiveProfile(),
+                    instance.getActiveProfileName(),
+                    instance.getProfiles().size(),
                     instance.getWorkerKey(),
                     instance.getAssignedAt(),
                     instance.getCreatedAt(),
@@ -180,7 +285,58 @@ public class InstanceController {
         }
     }
 
-    public record InstanceSettingsRequest(boolean rateLimitEnabled, int rateLimitRequests, int rateLimitWindowSeconds) {
+    public record InstanceSettingsRequest(
+            boolean rateLimitEnabled,
+            int rateLimitRequests,
+            int rateLimitWindowSeconds,
+            Boolean smartResponsesEnabled,
+            String smartSeedMode,
+            Boolean faultProfileEnabled,
+            Integer faultErrorRate,
+            Integer faultStatusCode,
+            Integer latencyMinMs,
+            Integer latencyMaxMs,
+            String activeProfile
+    ) {
+    }
+
+    public record ProfileRequest(
+            String name,
+            boolean faultProfileEnabled,
+            int faultErrorRate,
+            int faultStatusCode,
+            int latencyMinMs,
+            int latencyMaxMs
+    ) {
+        InstanceService.ProfileRequest toServiceRequest() {
+            return new InstanceService.ProfileRequest(name, faultProfileEnabled, faultErrorRate, faultStatusCode, latencyMinMs, latencyMaxMs);
+        }
+    }
+
+    public record ProfileView(
+            String id,
+            String name,
+            boolean faultProfileEnabled,
+            int faultErrorRate,
+            int faultStatusCode,
+            int latencyMinMs,
+            int latencyMaxMs,
+            Instant createdAt,
+            Instant updatedAt
+    ) {
+        static ProfileView from(MockProfile profile) {
+            return new ProfileView(
+                    profile.getId(),
+                    profile.getName(),
+                    profile.isFaultProfileEnabled(),
+                    profile.getFaultErrorRate(),
+                    profile.getFaultStatusCode(),
+                    profile.getLatencyMinMs(),
+                    profile.getLatencyMaxMs(),
+                    profile.getCreatedAt(),
+                    profile.getUpdatedAt()
+            );
+        }
     }
 
     public record ScenarioRequest(
@@ -237,6 +393,66 @@ public class InstanceController {
         }
     }
 
+    public record ResponseRuleRequest(
+            String name,
+            boolean enabled,
+            int priority,
+            String operationId,
+            String method,
+            String pathTemplate,
+            String fieldPath,
+            String type,
+            Object fixedValue,
+            Integer minValue,
+            Integer maxValue,
+            List<Object> enumValues,
+            String template
+    ) {
+        InstanceService.ResponseRuleRequest toServiceRequest() {
+            return new InstanceService.ResponseRuleRequest(name, enabled, priority, operationId, method, pathTemplate, fieldPath, type, fixedValue, minValue, maxValue, enumValues, template);
+        }
+    }
+
+    public record ResponseRuleView(
+            String id,
+            String name,
+            boolean enabled,
+            int priority,
+            String operationId,
+            String method,
+            String pathTemplate,
+            String fieldPath,
+            String type,
+            Object fixedValue,
+            Integer minValue,
+            Integer maxValue,
+            List<Object> enumValues,
+            String template,
+            Instant createdAt,
+            Instant updatedAt
+    ) {
+        static ResponseRuleView from(ResponseRule rule) {
+            return new ResponseRuleView(
+                    rule.getId(),
+                    rule.getName(),
+                    rule.isEnabled(),
+                    rule.getPriority(),
+                    rule.getOperationId(),
+                    rule.getMethod(),
+                    rule.getPathTemplate(),
+                    rule.getFieldPath(),
+                    rule.getType(),
+                    rule.getFixedValue(),
+                    rule.getMinValue(),
+                    rule.getMaxValue(),
+                    rule.getEnumValues(),
+                    rule.getTemplate(),
+                    rule.getCreatedAt(),
+                    rule.getUpdatedAt()
+            );
+        }
+    }
+
     public record RequestLogView(
             String id,
             String instanceId,
@@ -248,6 +464,9 @@ public class InstanceController {
             int responseStatus,
             boolean matched,
             String error,
+            String responseSource,
+            String profileName,
+            List<String> appliedRuleIds,
             long latencyMs,
             Instant receivedAt
     ) {
@@ -263,6 +482,9 @@ public class InstanceController {
                     log.getResponseStatus(),
                     log.isMatched(),
                     log.getError(),
+                    log.getResponseSource(),
+                    log.getProfileName(),
+                    log.getAppliedRuleIds(),
                     log.getLatencyMs(),
                     log.getReceivedAt()
             );

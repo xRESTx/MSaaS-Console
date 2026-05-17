@@ -3,6 +3,7 @@ package com.msaas.spec;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.msaas.spec.contract.MockResponseDefinition;
 import com.msaas.spec.contract.MockRoute;
+import com.msaas.spec.contract.MockSchemaDefinition;
 import com.msaas.spec.contract.NormalizedContract;
 import io.swagger.parser.OpenAPIParser;
 import io.swagger.v3.oas.models.OpenAPI;
@@ -138,8 +139,8 @@ public class OpenApiContractParser {
         content.forEach((contentType, mediaType) -> {
             Map<String, Object> examples = mediaType == null ? Map.of() : extractExamples(mediaType);
             Object example = mediaType == null ? null : extractExample(mediaType);
-            Object body = example == null ? exampleFromSchema(mediaType == null ? null : mediaType.getSchema()) : example;
-            variants.put(contentType, new MockResponseDefinition.ResponseContent(body, examples));
+            MockSchemaDefinition schema = mediaType == null ? null : schemaDefinition(mediaType.getSchema());
+            variants.put(contentType, new MockResponseDefinition.ResponseContent(example, examples, schema, example != null));
         });
 
         String contentType = variants.containsKey("application/json")
@@ -273,6 +274,63 @@ public class OpenApiContractParser {
             return "user@example.com";
         }
         return "string";
+    }
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private MockSchemaDefinition schemaDefinition(Schema schema) {
+        if (schema == null) {
+            return null;
+        }
+        if (schema.getOneOf() != null && !schema.getOneOf().isEmpty()) {
+            return schemaDefinition((Schema) schema.getOneOf().getFirst());
+        }
+        if (schema.getAnyOf() != null && !schema.getAnyOf().isEmpty()) {
+            return schemaDefinition((Schema) schema.getAnyOf().getFirst());
+        }
+        if (schema.getAllOf() != null && !schema.getAllOf().isEmpty()) {
+            MockSchemaDefinition merged = new MockSchemaDefinition();
+            merged.setType("object");
+            for (Object child : schema.getAllOf()) {
+                MockSchemaDefinition childDefinition = schemaDefinition((Schema) child);
+                if (childDefinition != null) {
+                    merged.getProperties().putAll(childDefinition.getProperties());
+                    merged.getRequiredProperties().addAll(childDefinition.getRequiredProperties());
+                }
+            }
+            return merged.getProperties().isEmpty() ? null : merged;
+        }
+
+        MockSchemaDefinition definition = new MockSchemaDefinition();
+        String type = schema.getType();
+        if ((type == null || type.isBlank()) && schema.getProperties() != null && !schema.getProperties().isEmpty()) {
+            type = "object";
+        }
+        if ((type == null || type.isBlank()) && schema.getItems() != null) {
+            type = "array";
+        }
+        definition.setType(type);
+        definition.setFormat(schema.getFormat());
+        definition.setNullable(Boolean.TRUE.equals(schema.getNullable()));
+        if (schema.getEnum() != null) {
+            definition.setEnumValues(schema.getEnum().stream().map(this::normalizeExample).toList());
+        }
+        if (schema.getRequired() != null) {
+            definition.setRequiredProperties(schema.getRequired());
+        }
+        if (schema.getProperties() != null) {
+            Map<String, MockSchemaDefinition> properties = new LinkedHashMap<>();
+            ((Map<String, Schema>) schema.getProperties()).forEach((name, property) -> properties.put(name, schemaDefinition(property)));
+            definition.setProperties(properties);
+        }
+        if (schema.getItems() != null) {
+            definition.setItems(schemaDefinition(schema.getItems()));
+        }
+        boolean hasShape = definition.getType() != null
+                || definition.getFormat() != null
+                || !definition.getEnumValues().isEmpty()
+                || !definition.getProperties().isEmpty()
+                || definition.getItems() != null;
+        return hasShape ? definition : null;
     }
 
     public record ParsedContract(NormalizedContract contract, List<String> errors) {

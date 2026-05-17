@@ -1208,7 +1208,7 @@ button:disabled {
 
 .admin-kpis {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: 8px;
 }
 
@@ -1388,7 +1388,7 @@ button:disabled {
 }
 
 .spec-publish-panel {
-  grid-template-rows: auto minmax(170px, 0.45fr) minmax(260px, 0.55fr);
+  grid-template-rows: auto minmax(140px, 0.28fr) minmax(220px, 0.38fr) minmax(190px, 0.34fr);
 }
 
 .runtime-panel {
@@ -1655,15 +1655,54 @@ button:disabled {
 }
 
 .instance-settings-grid,
-.scenario-form {
+.scenario-form,
+.profile-form {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 8px;
   align-items: end;
 }
 
-.scenario-form {
+.scenario-form,
+.profile-form {
   grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.preset-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.hint-text {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.profile-list {
+  max-height: none;
+}
+
+.scenario-card.active {
+  border-color: var(--accent);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.source-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 24px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0 8px;
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 850;
+  white-space: nowrap;
 }
 
 .scenario-body-field {
@@ -1678,6 +1717,28 @@ button:disabled {
   overflow: hidden;
   border-top: 1px solid var(--line);
   padding-top: 12px;
+}
+
+.response-preview-panel {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  gap: 10px;
+  min-height: 0;
+  overflow: hidden;
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+}
+
+.preview-controls {
+  display: grid;
+  grid-template-columns: 1.4fr repeat(4, minmax(110px, 0.7fr));
+  gap: 8px;
+  align-items: end;
+}
+
+.preview-pre {
+  min-height: 0;
+  max-height: none;
 }
 
 .compact-heading {
@@ -1767,7 +1828,7 @@ button:disabled {
 .log-row {
   display: grid;
   align-self: start;
-  grid-template-columns: 82px minmax(0, 1fr) 72px 86px auto;
+  grid-template-columns: 82px minmax(0, 1fr) 72px 86px minmax(120px, auto) auto;
   gap: 10px;
   align-items: center;
   width: 100%;
@@ -2188,6 +2249,7 @@ button:disabled {
   .api-key-box,
   .request-line,
   .instance-settings-grid,
+  .preview-controls,
   .scenario-form,
   .scenario-card {
     grid-template-columns: 1fr;

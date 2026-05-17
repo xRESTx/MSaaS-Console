@@ -92,7 +92,13 @@ public class MockResponseDefinition {
         copy.setHeaders(new LinkedHashMap<>(headers));
         copy.setExamples(new LinkedHashMap<>(getExamples()));
         copy.setContents(new LinkedHashMap<>(getContents()));
-        copy.getContents().put(copy.getContentType(), new ResponseContent(nextBody, copy.getExamples()));
+        ResponseContent current = getContents().get(copy.getContentType());
+        copy.getContents().put(copy.getContentType(), new ResponseContent(
+                nextBody,
+                copy.getExamples(),
+                current == null ? null : current.getSchema(),
+                current == null || current.isExplicitExample()
+        ));
         return copy;
     }
 
@@ -107,13 +113,21 @@ public class MockResponseDefinition {
     public static class ResponseContent {
         private Object body;
         private Map<String, Object> examples = new LinkedHashMap<>();
+        private MockSchemaDefinition schema;
+        private boolean explicitExample = true;
 
         public ResponseContent() {
         }
 
         public ResponseContent(Object body, Map<String, Object> examples) {
+            this(body, examples, null, body != null);
+        }
+
+        public ResponseContent(Object body, Map<String, Object> examples, MockSchemaDefinition schema, boolean explicitExample) {
             this.body = body;
             this.examples = examples == null ? new LinkedHashMap<>() : examples;
+            this.schema = schema;
+            this.explicitExample = explicitExample;
         }
 
         public Object getBody() {
@@ -133,6 +147,22 @@ public class MockResponseDefinition {
 
         public void setExamples(Map<String, Object> examples) {
             this.examples = examples == null ? new LinkedHashMap<>() : examples;
+        }
+
+        public MockSchemaDefinition getSchema() {
+            return schema;
+        }
+
+        public void setSchema(MockSchemaDefinition schema) {
+            this.schema = schema;
+        }
+
+        public boolean isExplicitExample() {
+            return explicitExample;
+        }
+
+        public void setExplicitExample(boolean explicitExample) {
+            this.explicitExample = explicitExample;
         }
     }
 }

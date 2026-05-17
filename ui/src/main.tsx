@@ -89,7 +89,9 @@ type ContractRoute = {
 type ContractResponse = {
   statusCode: number;
   contentType: string;
+  contentTypes: string[];
   examples: string[];
+  schemaAvailable: boolean;
 };
 
 type MockInstance = {
@@ -107,7 +109,18 @@ type MockInstance = {
   rateLimitEnabled: boolean;
   rateLimitRequests: number;
   rateLimitWindowSeconds: number;
+  smartResponsesEnabled: boolean;
+  smartSeedMode: string;
   scenarioCount: number;
+  responseRuleCount: number;
+  faultProfileEnabled: boolean;
+  faultErrorRate: number;
+  faultStatusCode: number;
+  latencyMinMs: number;
+  latencyMaxMs: number;
+  activeProfile: string;
+  activeProfileName: string;
+  profileCount: number;
 };
 
 type MockScenario = {
@@ -127,6 +140,45 @@ type MockScenario = {
   updatedAt: string;
 };
 
+type ResponseRule = {
+  id: string;
+  name: string;
+  enabled: boolean;
+  priority: number;
+  operationId: string | null;
+  method: string | null;
+  pathTemplate: string | null;
+  fieldPath: string;
+  type: string;
+  fixedValue: unknown;
+  minValue: number | null;
+  maxValue: number | null;
+  enumValues: unknown[];
+  template: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+type MockProfile = {
+  id: string;
+  name: string;
+  faultProfileEnabled: boolean;
+  faultErrorRate: number;
+  faultStatusCode: number;
+  latencyMinMs: number;
+  latencyMaxMs: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+type ResponsePreview = {
+  statusCode: number;
+  contentType: string;
+  body: unknown;
+  generated: boolean;
+  seed: string;
+};
+
 type RequestLog = {
   id: string;
   method: string;
@@ -137,6 +189,9 @@ type RequestLog = {
   responseStatus: number;
   matched: boolean;
   error: string | null;
+  responseSource: string;
+  profileName: string | null;
+  appliedRuleIds: string[];
   latencyMs: number;
   receivedAt: string;
 };
@@ -187,10 +242,13 @@ type AdminSummary = {
   invalidSpecVersions: number;
   instances: number;
   runningInstances: number;
+  runtimeWorkers: number;
   runtimeSlots: number;
   requestLogs: number;
   serverErrors: number;
   unmatchedRequests: number;
+  rateLimitEvents: number;
+  unmatchedRatio: number;
   averageLatencyMs: number;
 };
 
@@ -246,6 +304,9 @@ type AdminLog = {
   responseStatus: number;
   matched: boolean;
   error: string | null;
+  responseSource: string;
+  profileName: string | null;
+  appliedRuleIds: string[];
   latencyMs: number;
   receivedAt: string;
 };
@@ -932,6 +993,12 @@ function App() {
   const [specVersions, setSpecVersions] = useState<SpecVersion[]>([]);
   const [routeExplorerVersionId, setRouteExplorerVersionId] = useState("");
   const [contractRoutes, setContractRoutes] = useState<ContractRoute[]>([]);
+  const [previewRouteKey, setPreviewRouteKey] = useState("");
+  const [previewStatusCode, setPreviewStatusCode] = useState(200);
+  const [previewContentType, setPreviewContentType] = useState("application/json");
+  const [previewExampleName, setPreviewExampleName] = useState("");
+  const [previewSeed, setPreviewSeed] = useState("");
+  const [responsePreview, setResponsePreview] = useState<ResponsePreview | null>(null);
   const [instances, setInstances] = useState<MockInstance[]>([]);
   const [selectedInstanceId, setSelectedInstanceId] = useState("");
   const [instancePage, setInstancePage] = useState(0);
@@ -947,7 +1014,38 @@ function App() {
   const [rateLimitEnabled, setRateLimitEnabled] = useState(true);
   const [rateLimitRequests, setRateLimitRequests] = useState(120);
   const [rateLimitWindowSeconds, setRateLimitWindowSeconds] = useState(60);
+  const [smartResponsesEnabled, setSmartResponsesEnabled] = useState(true);
+  const [smartSeedMode, setSmartSeedMode] = useState("STABLE");
   const [scenarios, setScenarios] = useState<MockScenario[]>([]);
+  const [responseRules, setResponseRules] = useState<ResponseRule[]>([]);
+  const [profiles, setProfiles] = useState<MockProfile[]>([]);
+  const [activeProfile, setActiveProfile] = useState("dev");
+  const [faultProfileEnabled, setFaultProfileEnabled] = useState(false);
+  const [faultErrorRate, setFaultErrorRate] = useState(0);
+  const [faultStatusCode, setFaultStatusCode] = useState(500);
+  const [latencyMinMs, setLatencyMinMs] = useState(0);
+  const [latencyMaxMs, setLatencyMaxMs] = useState(0);
+  const [editingProfileId, setEditingProfileId] = useState("");
+  const [profileName, setProfileName] = useState("qa-fast-fail");
+  const [profileFaultEnabled, setProfileFaultEnabled] = useState(true);
+  const [profileErrorRate, setProfileErrorRate] = useState(10);
+  const [profileStatusCode, setProfileStatusCode] = useState(500);
+  const [profileLatencyMin, setProfileLatencyMin] = useState(120);
+  const [profileLatencyMax, setProfileLatencyMax] = useState(450);
+  const [editingRuleId, setEditingRuleId] = useState("");
+  const [ruleName, setRuleName] = useState("VIP customer email");
+  const [ruleEnabled, setRuleEnabled] = useState(true);
+  const [rulePriority, setRulePriority] = useState(100);
+  const [ruleOperationId, setRuleOperationId] = useState("");
+  const [ruleMethod, setRuleMethod] = useState("GET");
+  const [rulePathTemplate, setRulePathTemplate] = useState("/orders");
+  const [ruleFieldPath, setRuleFieldPath] = useState("customer.email");
+  const [ruleType, setRuleType] = useState("FIXED");
+  const [ruleFixedValue, setRuleFixedValue] = useState("\"vip@example.com\"");
+  const [ruleMinValue, setRuleMinValue] = useState(1);
+  const [ruleMaxValue, setRuleMaxValue] = useState(100);
+  const [ruleEnumValues, setRuleEnumValues] = useState("pending, paid, cancelled");
+  const [ruleTemplate, setRuleTemplate] = useState("{{query.name}}");
   const [editingScenarioId, setEditingScenarioId] = useState("");
   const [scenarioName, setScenarioName] = useState("Slow 500 example");
   const [scenarioEnabled, setScenarioEnabled] = useState(true);
@@ -962,6 +1060,8 @@ function App() {
   const [logs, setLogs] = useState<RequestLog[]>([]);
   const [logMethodFilter, setLogMethodFilter] = useState("ALL");
   const [logMatchFilter, setLogMatchFilter] = useState("ALL");
+  const [logSourceFilter, setLogSourceFilter] = useState("ALL");
+  const [logStatusFilter, setLogStatusFilter] = useState("ALL");
   const [logPage, setLogPage] = useState(0);
   const [selectedLog, setSelectedLog] = useState<RequestLog | null>(null);
   const [members, setMembers] = useState<ProjectMember[]>([]);
@@ -1003,6 +1103,7 @@ function App() {
   const t = text[lang];
   const selectedProject = projects.find((project) => project.id === selectedProjectId) ?? null;
   const selectedInstance = instances.find((instance) => instance.id === selectedInstanceId) ?? null;
+  const selectedPreviewRoute = contractRoutes.find((route) => routeKey(route) === previewRouteKey) ?? contractRoutes[0] ?? null;
   const isAdmin = user?.systemRole === "ADMIN";
   const visibleViews = views;
   const canWrite = selectedProject?.role === "OWNER" || selectedProject?.role === "MEMBER";
@@ -1015,7 +1116,12 @@ function App() {
   const visibleLogs = logs.filter((log) => {
     const methodOk = logMethodFilter === "ALL" || log.method === logMethodFilter;
     const matchOk = logMatchFilter === "ALL" || (logMatchFilter === "MATCHED" ? log.matched : !log.matched);
-    return methodOk && matchOk;
+    const sourceOk = logSourceFilter === "ALL" || log.responseSource === logSourceFilter;
+    const statusOk = logStatusFilter === "ALL"
+      || (logStatusFilter === "2xx" && log.responseStatus >= 200 && log.responseStatus < 300)
+      || (logStatusFilter === "4xx" && log.responseStatus >= 400 && log.responseStatus < 500)
+      || (logStatusFilter === "5xx" && log.responseStatus >= 500 && log.responseStatus < 600);
+    return methodOk && matchOk && sourceOk && statusOk;
   });
   const projectListPage = paginate(filteredProjects, projectPage, 5);
   const visibleLogsPage = paginate(visibleLogs, logPage, 100);
@@ -1116,7 +1222,7 @@ function App() {
 
   useEffect(() => {
     setLogPage(0);
-  }, [logMethodFilter, logMatchFilter, selectedInstanceId]);
+  }, [logMethodFilter, logMatchFilter, logSourceFilter, logStatusFilter, selectedInstanceId]);
 
   useEffect(() => {
     setAdminUserPage(0);
@@ -1128,11 +1234,23 @@ function App() {
       setRateLimitEnabled(selectedInstance.rateLimitEnabled);
       setRateLimitRequests(selectedInstance.rateLimitRequests);
       setRateLimitWindowSeconds(selectedInstance.rateLimitWindowSeconds);
+      setSmartResponsesEnabled(selectedInstance.smartResponsesEnabled);
+      setSmartSeedMode(selectedInstance.smartSeedMode || "STABLE");
+      setActiveProfile(selectedInstance.activeProfile || "dev");
+      setFaultProfileEnabled(selectedInstance.faultProfileEnabled);
+      setFaultErrorRate(selectedInstance.faultErrorRate);
+      setFaultStatusCode(selectedInstance.faultStatusCode);
+      setLatencyMinMs(selectedInstance.latencyMinMs);
+      setLatencyMaxMs(selectedInstance.latencyMaxMs);
       void refreshScenarios(selectedInstance.id);
+      void refreshResponseRules(selectedInstance.id);
+      void refreshProfiles(selectedInstance.id);
       void refreshLogs(selectedInstance.id);
       void refreshState(selectedInstance.id);
     } else {
       setScenarios([]);
+      setResponseRules([]);
+      setProfiles([]);
     }
   }, [selectedInstanceId, issuedApiKeys]);
 
@@ -1153,6 +1271,24 @@ function App() {
       setContractRoutes([]);
     }
   }, [routeExplorerVersionId]);
+
+  useEffect(() => {
+    if (contractRoutes.length === 0) {
+      setPreviewRouteKey("");
+      setResponsePreview(null);
+      return;
+    }
+    const nextRoute = contractRoutes.find((route) => routeKey(route) === previewRouteKey) ?? contractRoutes[0];
+    if (routeKey(nextRoute) !== previewRouteKey) {
+      setPreviewRouteKey(routeKey(nextRoute));
+    }
+    const firstResponse = nextRoute.responses[0];
+    if (firstResponse) {
+      setPreviewStatusCode(firstResponse.statusCode);
+      setPreviewContentType(firstResponse.contentType);
+      setPreviewExampleName("");
+    }
+  }, [contractRoutes, previewRouteKey]);
 
   useEffect(() => {
     setAccountUsername(user?.username ?? "");
@@ -1509,6 +1645,7 @@ function App() {
       setSelectedInstanceId(instance.id);
       navigateView("runtime");
       notify(t.publish);
+      await refreshProfiles(instance.id);
       await refreshRuntimePlane();
       if (selectedProjectId) await refreshProjectDetails(selectedProjectId);
     });
@@ -1584,6 +1721,38 @@ function App() {
     });
   }
 
+  async function refreshResponseRules(instanceId: string) {
+    await run("response-rules", async () => {
+      setResponseRules(await api<ResponseRule[]>(`/api/instances/${instanceId}/response-rules`, { headers: authHeaders }));
+    });
+  }
+
+  async function refreshProfiles(instanceId: string) {
+    await run("profiles", async () => {
+      setProfiles(await api<MockProfile[]>(`/api/instances/${instanceId}/profiles`, { headers: authHeaders }));
+    });
+  }
+
+  async function previewSmartResponse() {
+    if (!routeExplorerVersionId || !selectedPreviewRoute) return;
+    await run("response-preview", async () => {
+      const preview = await api<ResponsePreview>(`/api/spec-versions/${routeExplorerVersionId}/response-preview`, {
+        method: "POST",
+        headers: authHeaders,
+        body: JSON.stringify({
+          operationId: selectedPreviewRoute.operationId,
+          method: selectedPreviewRoute.method,
+          pathTemplate: selectedPreviewRoute.pathTemplate,
+          statusCode: previewStatusCode,
+          contentType: previewContentType,
+          exampleName: previewExampleName || null,
+          seed: previewSeed || null
+        })
+      });
+      setResponsePreview(preview);
+    });
+  }
+
   async function saveInstanceSettings() {
     if (!selectedInstance) return;
     await run("instance-settings", async () => {
@@ -1593,12 +1762,130 @@ function App() {
         body: JSON.stringify({
           rateLimitEnabled,
           rateLimitRequests,
-          rateLimitWindowSeconds
+          rateLimitWindowSeconds,
+          smartResponsesEnabled,
+          smartSeedMode,
+          faultProfileEnabled,
+          faultErrorRate,
+          faultStatusCode,
+          latencyMinMs,
+          latencyMaxMs,
+          activeProfile
         })
       });
       setInstances((current) => current.map((item) => (item.id === updated.id ? updated : item)));
       notify(lang === "ru" ? "Настройки инстанса сохранены" : "Instance settings saved");
+      await refreshProfiles(selectedInstance.id);
       await refreshRuntimePlane();
+    });
+  }
+
+  async function saveProfile() {
+    if (!selectedInstance) return;
+    const payload = {
+      name: profileName,
+      faultProfileEnabled: profileFaultEnabled,
+      faultErrorRate: profileErrorRate,
+      faultStatusCode: profileStatusCode,
+      latencyMinMs: profileLatencyMin,
+      latencyMaxMs: profileLatencyMax
+    };
+    await run("profile-save", async () => {
+      const path = editingProfileId
+        ? `/api/instances/${selectedInstance.id}/profiles/${editingProfileId}`
+        : `/api/instances/${selectedInstance.id}/profiles`;
+      const saved = await api<MockProfile>(path, {
+        method: editingProfileId ? "PATCH" : "POST",
+        headers: authHeaders,
+        body: JSON.stringify(payload)
+      });
+      setProfiles((current) => editingProfileId
+        ? current.map((profile) => profile.id === saved.id ? saved : profile)
+        : [saved, ...current]);
+      resetProfileForm();
+      notify(lang === "ru" ? "Профиль окружения сохранен" : "Environment profile saved");
+    });
+  }
+
+  async function activateProfile(profileId: string) {
+    if (!selectedInstance) return;
+    await run(`profile-activate-${profileId}`, async () => {
+      const updated = await api<MockInstance>(`/api/instances/${selectedInstance.id}/profiles/${profileId}/activate`, {
+        method: "POST",
+        headers: authHeaders
+      });
+      setInstances((current) => current.map((item) => item.id === updated.id ? updated : item));
+      setActiveProfile(updated.activeProfile);
+      setFaultProfileEnabled(updated.faultProfileEnabled);
+      setFaultErrorRate(updated.faultErrorRate);
+      setFaultStatusCode(updated.faultStatusCode);
+      setLatencyMinMs(updated.latencyMinMs);
+      setLatencyMaxMs(updated.latencyMaxMs);
+      notify(lang === "ru" ? "Профиль активирован без смены mock URL" : "Profile activated without changing mock URL");
+      await refreshRuntimePlane();
+    });
+  }
+
+  async function deleteProfile(profileId: string) {
+    if (!selectedInstance) return;
+    await run(`profile-delete-${profileId}`, async () => {
+      await api<void>(`/api/instances/${selectedInstance.id}/profiles/${profileId}`, {
+        method: "DELETE",
+        headers: authHeaders
+      });
+      setProfiles((current) => current.filter((profile) => profile.id !== profileId));
+      if (editingProfileId === profileId) {
+        resetProfileForm();
+      }
+      notify(lang === "ru" ? "Профиль удален" : "Profile deleted");
+    });
+  }
+
+  async function saveResponseRule() {
+    if (!selectedInstance) return;
+    const payload = {
+      name: ruleName,
+      enabled: ruleEnabled,
+      priority: rulePriority,
+      operationId: ruleOperationId || null,
+      method: ruleMethod || null,
+      pathTemplate: rulePathTemplate || null,
+      fieldPath: ruleFieldPath,
+      type: ruleType,
+      fixedValue: parseJsonOrText(ruleFixedValue),
+      minValue: ruleMinValue,
+      maxValue: ruleMaxValue,
+      enumValues: ruleEnumValues.split(",").map((value) => parseJsonOrText(value.trim())).filter((value) => String(value ?? "").length > 0),
+      template: ruleTemplate
+    };
+    await run("response-rule-save", async () => {
+      const path = editingRuleId
+        ? `/api/instances/${selectedInstance.id}/response-rules/${editingRuleId}`
+        : `/api/instances/${selectedInstance.id}/response-rules`;
+      const saved = await api<ResponseRule>(path, {
+        method: editingRuleId ? "PATCH" : "POST",
+        headers: authHeaders,
+        body: JSON.stringify(payload)
+      });
+      setResponseRules((current) => editingRuleId
+        ? current.map((item) => (item.id === saved.id ? saved : item))
+        : [saved, ...current]);
+      resetResponseRuleForm();
+      notify(lang === "ru" ? "Правило ответа сохранено" : "Response rule saved");
+      if (selectedProjectId) await refreshProjectDetails(selectedProjectId);
+      await previewSmartResponse();
+    });
+  }
+
+  async function deleteResponseRule(ruleId: string) {
+    if (!selectedInstance) return;
+    await run(`response-rule-delete-${ruleId}`, async () => {
+      await api<void>(`/api/instances/${selectedInstance.id}/response-rules/${ruleId}`, {
+        method: "DELETE",
+        headers: authHeaders
+      });
+      setResponseRules((current) => current.filter((rule) => rule.id !== ruleId));
+      if (selectedProjectId) await refreshProjectDetails(selectedProjectId);
     });
   }
 
@@ -1662,6 +1949,120 @@ function App() {
     setScenarioContentType(scenario.contentType ?? "application/json");
     setScenarioDelayMs(scenario.delayMs);
     setScenarioBody(formatBody(scenario.body));
+  }
+
+  function editResponseRule(rule: ResponseRule) {
+    setEditingRuleId(rule.id);
+    setRuleName(rule.name);
+    setRuleEnabled(rule.enabled);
+    setRulePriority(rule.priority);
+    setRuleOperationId(rule.operationId ?? "");
+    setRuleMethod(rule.method ?? "GET");
+    setRulePathTemplate(rule.pathTemplate ?? "/orders");
+    setRuleFieldPath(rule.fieldPath);
+    setRuleType(rule.type || "FIXED");
+    setRuleFixedValue(formatBody(rule.fixedValue));
+    setRuleMinValue(rule.minValue ?? 1);
+    setRuleMaxValue(rule.maxValue ?? 100);
+    setRuleEnumValues((rule.enumValues ?? []).map((value) => typeof value === "string" ? value : JSON.stringify(value)).join(", "));
+    setRuleTemplate(rule.template ?? "{{query.name}}");
+  }
+
+  function resetResponseRuleForm() {
+    setEditingRuleId("");
+    setRuleName("VIP customer email");
+    setRuleEnabled(true);
+    setRulePriority(100);
+    setRuleFieldPath("customer.email");
+    setRuleType("FIXED");
+    setRuleFixedValue("\"vip@example.com\"");
+    setRuleMinValue(1);
+    setRuleMaxValue(100);
+    setRuleEnumValues("pending, paid, cancelled");
+    setRuleTemplate("{{query.name}}");
+  }
+
+  function editProfile(profile: MockProfile) {
+    setEditingProfileId(profile.id);
+    setProfileName(profile.name);
+    setProfileFaultEnabled(profile.faultProfileEnabled);
+    setProfileErrorRate(profile.faultErrorRate);
+    setProfileStatusCode(profile.faultStatusCode);
+    setProfileLatencyMin(profile.latencyMinMs);
+    setProfileLatencyMax(profile.latencyMaxMs);
+  }
+
+  function resetProfileForm() {
+    setEditingProfileId("");
+    setProfileName("qa-fast-fail");
+    setProfileFaultEnabled(true);
+    setProfileErrorRate(10);
+    setProfileStatusCode(500);
+    setProfileLatencyMin(120);
+    setProfileLatencyMax(450);
+  }
+
+  function applyScenarioPreset(kind: "success" | "payment-error" | "empty-list" | "delay") {
+    const route = selectedPreviewRoute ?? contractRoutes[0];
+    if (route) {
+      setScenarioMethod(route.method);
+      setScenarioPathTemplate(route.pathTemplate);
+      setScenarioOperationId(route.operationId ?? "");
+    }
+    setScenarioEnabled(true);
+    if (kind === "success") {
+      setScenarioName(lang === "ru" ? "Успешный заказ" : "Successful order");
+      setScenarioStatusCode(200);
+      setScenarioPriority(300);
+      setScenarioDelayMs(0);
+      setScenarioBody('{"id":"{{path.id}}","status":"paid","trace":"{{header.x-trace-id}}","requestId":"{{uuid}}"}');
+    }
+    if (kind === "payment-error") {
+      setScenarioName(lang === "ru" ? "Ошибка оплаты" : "Payment error");
+      setScenarioStatusCode(402);
+      setScenarioPriority(320);
+      setScenarioDelayMs(0);
+      setScenarioBody('{"error":"payment_failed","message":"Card was declined","requestId":"{{uuid}}"}');
+    }
+    if (kind === "empty-list") {
+      setScenarioName(lang === "ru" ? "Пустой список" : "Empty list");
+      setScenarioStatusCode(200);
+      setScenarioPriority(250);
+      setScenarioDelayMs(0);
+      setScenarioBody("[]");
+    }
+    if (kind === "delay") {
+      setScenarioName(lang === "ru" ? "Задержка ответа" : "Delayed response");
+      setScenarioStatusCode(200);
+      setScenarioPriority(180);
+      setScenarioDelayMs(1200);
+      setScenarioBody('{"ok":true,"delayed":true,"time":"{{now}}"}');
+    }
+  }
+
+  function applyRulePreset(kind: "random-price" | "template-email") {
+    const route = selectedPreviewRoute ?? contractRoutes[0];
+    if (route) {
+      setRuleMethod(route.method);
+      setRulePathTemplate(route.pathTemplate);
+      setRuleOperationId(route.operationId ?? "");
+    }
+    setRuleEnabled(true);
+    if (kind === "random-price") {
+      setRuleName(lang === "ru" ? "Случайная цена" : "Random price");
+      setRuleType("RANDOM_INT");
+      setRuleFieldPath("items[0].price");
+      setRulePriority(180);
+      setRuleMinValue(100);
+      setRuleMaxValue(9999);
+    }
+    if (kind === "template-email") {
+      setRuleName(lang === "ru" ? "Email из запроса" : "Email from request");
+      setRuleType("TEMPLATE");
+      setRuleFieldPath("customer.email");
+      setRulePriority(160);
+      setRuleTemplate("{{query.name}}@example.com");
+    }
   }
 
   async function addMember() {
@@ -2272,7 +2673,9 @@ function App() {
           <Detail label="Status" value={String(selectedLog.responseStatus)} />
           <Detail label="Latency" value={`${selectedLog.latencyMs}ms`} />
           <Detail label="Query" value={selectedLog.queryString || "-"} />
-          <pre>{JSON.stringify({ headers: selectedLog.requestHeaders, body: selectedLog.requestBody, error: selectedLog.error }, null, 2)}</pre>
+          <Detail label={lang === "ru" ? "Источник" : "Source"} value={sourceLabel(selectedLog.responseSource, lang)} />
+          <Detail label={lang === "ru" ? "Профиль" : "Profile"} value={selectedLog.profileName || "-"} />
+          <pre>{JSON.stringify({ headers: selectedLog.requestHeaders, body: selectedLog.requestBody, error: selectedLog.error, appliedRuleIds: selectedLog.appliedRuleIds }, null, 2)}</pre>
         </aside>
       )}
 
@@ -2503,6 +2906,51 @@ function App() {
               {contractRoutes.length === 0 && <EmptyState icon={<FileJson size={28} />} text={lang === "ru" ? "Выбери валидную спецификацию." : "Select a valid specification."} compact />}
             </div>
           </div>
+          <div className="response-preview-panel">
+            <div className="surface-heading compact-heading">
+              <div>
+                <p className="eyebrow">Smart responses</p>
+                <h2>{lang === "ru" ? "Preview ответа" : "Response preview"}</h2>
+              </div>
+              <button className="soft-button" onClick={previewSmartResponse} disabled={!selectedPreviewRoute || busy["response-preview"]}>
+                {busy["response-preview"] ? <Loader2 className="spin" size={16} /> : <Play size={16} />}
+                Preview
+              </button>
+            </div>
+            <div className="preview-controls">
+              <label>{lang === "ru" ? "Маршрут" : "Route"}
+                <select value={previewRouteKey} onChange={(event) => setPreviewRouteKey(event.target.value)}>
+                  {contractRoutes.map((route) => (
+                    <option value={routeKey(route)} key={routeKey(route)}>{route.method} {route.pathTemplate}</option>
+                  ))}
+                </select>
+              </label>
+              <label>Status
+                <select value={previewStatusCode} onChange={(event) => setPreviewStatusCode(Number(event.target.value))}>
+                  {(selectedPreviewRoute?.responses ?? []).map((response) => (
+                    <option value={response.statusCode} key={`${response.statusCode}-${response.contentType}`}>{response.statusCode} {response.schemaAvailable ? "schema" : "example"}</option>
+                  ))}
+                </select>
+              </label>
+              <label>Content-Type
+                <select value={previewContentType} onChange={(event) => setPreviewContentType(event.target.value)}>
+                  {[...new Set((selectedPreviewRoute?.responses ?? []).flatMap((response) => response.contentTypes?.length ? response.contentTypes : [response.contentType]))].map((contentType) => (
+                    <option value={contentType} key={contentType}>{contentType}</option>
+                  ))}
+                </select>
+              </label>
+              <label>Example
+                <select value={previewExampleName} onChange={(event) => setPreviewExampleName(event.target.value)}>
+                  <option value="">AUTO</option>
+                  {(selectedPreviewRoute?.responses.find((response) => response.statusCode === previewStatusCode)?.examples ?? []).map((example) => (
+                    <option value={example} key={example}>{example}</option>
+                  ))}
+                </select>
+              </label>
+              <label>Seed<input value={previewSeed} onChange={(event) => setPreviewSeed(event.target.value)} placeholder="auto" /></label>
+            </div>
+            <pre className="panel-pre preview-pre">{responsePreview ? JSON.stringify(responsePreview, null, 2) : "-"}</pre>
+          </div>
         </article>
       </section>
     );
@@ -2525,7 +2973,7 @@ function App() {
                 <span className="status-dot" />
                 <span>
                   <strong>{instance.status} · {instance.mode}</strong>
-                  <small>{instance.routeCount} {t.routeCount} · {t.tokenPreview}: {instance.tokenPreview}</small>
+                  <small>{instance.routeCount} {t.routeCount} · {instance.activeProfileName || instance.activeProfile} · {t.tokenPreview}: {instance.tokenPreview}</small>
                 </span>
                 <code>{issuedUrls[instance.id] ?? instance.publicUrl ?? t.noUrl}</code>
               </button>
@@ -2570,6 +3018,32 @@ function App() {
               </label>
               <label>{lang === "ru" ? "Запросов" : "Requests"}<input type="number" min={1} value={rateLimitRequests} onChange={(event) => setRateLimitRequests(Number(event.target.value))} disabled={!canWrite} /></label>
               <label>{lang === "ru" ? "Окно, сек" : "Window, sec"}<input type="number" min={1} value={rateLimitWindowSeconds} onChange={(event) => setRateLimitWindowSeconds(Number(event.target.value))} disabled={!canWrite} /></label>
+              <label className="check-row">
+                <input type="checkbox" checked={smartResponsesEnabled} onChange={(event) => setSmartResponsesEnabled(event.target.checked)} disabled={!canWrite} />
+                Smart responses
+              </label>
+              <label>Seed mode
+                <select value={smartSeedMode} onChange={(event) => setSmartSeedMode(event.target.value)} disabled={!canWrite}>
+                  <option value="STABLE">STABLE</option>
+                  <option value="RANDOM">RANDOM</option>
+                </select>
+              </label>
+              <label>{lang === "ru" ? "Активный профиль" : "Active profile"}
+                <select value={activeProfile} onChange={(event) => setActiveProfile(event.target.value)} disabled={!canWrite}>
+                  {profiles.map((profile) => (
+                    <option value={profile.id} key={profile.id}>{profile.name}</option>
+                  ))}
+                  {profiles.length === 0 && <option value={activeProfile}>{activeProfile}</option>}
+                </select>
+              </label>
+              <label className="check-row">
+                <input type="checkbox" checked={faultProfileEnabled} onChange={(event) => setFaultProfileEnabled(event.target.checked)} disabled={!canWrite} />
+                {lang === "ru" ? "Fault profile" : "Fault profile"}
+              </label>
+              <label>{lang === "ru" ? "Ошибки, %" : "Error rate, %"}<input type="number" min={0} max={100} value={faultErrorRate} onChange={(event) => setFaultErrorRate(Number(event.target.value))} disabled={!canWrite} /></label>
+              <label>{lang === "ru" ? "Fault status" : "Fault status"}<input type="number" min={400} max={599} value={faultStatusCode} onChange={(event) => setFaultStatusCode(Number(event.target.value))} disabled={!canWrite} /></label>
+              <label>{lang === "ru" ? "Latency min, ms" : "Latency min, ms"}<input type="number" min={0} value={latencyMinMs} onChange={(event) => setLatencyMinMs(Number(event.target.value))} disabled={!canWrite} /></label>
+              <label>{lang === "ru" ? "Latency max, ms" : "Latency max, ms"}<input type="number" min={0} value={latencyMaxMs} onChange={(event) => setLatencyMaxMs(Number(event.target.value))} disabled={!canWrite} /></label>
               <button className="soft-button" onClick={saveInstanceSettings} disabled={!canWrite || busy["instance-settings"]}>
                 {busy["instance-settings"] ? <Loader2 className="spin" size={16} /> : <Settings2 size={16} />}
                 {t.save}
@@ -2594,6 +3068,54 @@ function App() {
           <ResponseBlock title={t.response} value={mockResponse} clearLabel={t.clear} onClear={() => setMockResponse("")} />
         </article>
 
+        <article className="surface runtime-panel profile-panel">
+          <div className="surface-heading">
+            <div>
+              <p className="eyebrow">Environment profiles</p>
+              <h2>{lang === "ru" ? "Профили окружений" : "Environment profiles"}</h2>
+            </div>
+            <button className="soft-button" onClick={() => selectedInstance && refreshProfiles(selectedInstance.id)} disabled={!selectedInstance}>
+              <RefreshCw size={16} />
+              {t.refresh}
+            </button>
+          </div>
+          <p className="hint-text">{lang === "ru"
+            ? "Переключай dev / qa / demo или свой профиль без пересоздания публичной mock-ссылки."
+            : "Switch dev / qa / demo or a custom profile without recreating the public mock URL."}</p>
+          <div className="profile-form">
+            <label>{lang === "ru" ? "Название" : "Name"}<input value={profileName} onChange={(event) => setProfileName(event.target.value)} disabled={!canWrite} /></label>
+            <label className="check-row">
+              <input type="checkbox" checked={profileFaultEnabled} onChange={(event) => setProfileFaultEnabled(event.target.checked)} disabled={!canWrite} />
+              {lang === "ru" ? "Включить ошибки" : "Enable faults"}
+            </label>
+            <label>{lang === "ru" ? "Ошибки, %" : "Error rate, %"}<input type="number" min={0} max={100} value={profileErrorRate} onChange={(event) => setProfileErrorRate(Number(event.target.value))} disabled={!canWrite} /></label>
+            <label>{lang === "ru" ? "Статус" : "Status"}<input type="number" min={400} max={599} value={profileStatusCode} onChange={(event) => setProfileStatusCode(Number(event.target.value))} disabled={!canWrite} /></label>
+            <label>{lang === "ru" ? "Min ms" : "Min ms"}<input type="number" min={0} value={profileLatencyMin} onChange={(event) => setProfileLatencyMin(Number(event.target.value))} disabled={!canWrite} /></label>
+            <label>{lang === "ru" ? "Max ms" : "Max ms"}<input type="number" min={0} value={profileLatencyMax} onChange={(event) => setProfileLatencyMax(Number(event.target.value))} disabled={!canWrite} /></label>
+            <button className="primary-button" onClick={saveProfile} disabled={!selectedInstance || !canWrite || busy["profile-save"]}>
+              {busy["profile-save"] ? <Loader2 className="spin" size={16} /> : <Settings2 size={16} />}
+              {editingProfileId ? t.save : lang === "ru" ? "Добавить профиль" : "Add profile"}
+            </button>
+          </div>
+          <div className="stack-list panel-scroll profile-list">
+            {profiles.map((profile) => (
+              <div className={cx("scenario-card", profile.id === activeProfile && "active")} key={profile.id}>
+                <div>
+                  <strong>{profile.name}</strong>
+                  <small>{profile.faultProfileEnabled ? `${profile.faultErrorRate}% -> ${profile.faultStatusCode}` : "fault off"} · {profile.latencyMinMs}-{profile.latencyMaxMs}ms</small>
+                  <small>{profile.id === activeProfile ? (lang === "ru" ? "активен" : "active") : (lang === "ru" ? "готов к включению" : "ready")}</small>
+                </div>
+                <div className="card-actions">
+                  <button className="soft-button" onClick={() => activateProfile(profile.id)} disabled={!canWrite || profile.id === activeProfile}>{lang === "ru" ? "Включить" : "Activate"}</button>
+                  <button className="soft-button" onClick={() => editProfile(profile)} disabled={!canWrite}>{t.save}</button>
+                  <button className="icon-button danger-icon" onClick={() => deleteProfile(profile.id)} disabled={!canWrite}><Trash2 size={16} /></button>
+                </div>
+              </div>
+            ))}
+            {profiles.length === 0 && <EmptyState icon={<Settings2 size={28} />} text={lang === "ru" ? "Профилей пока нет." : "No profiles yet."} compact />}
+          </div>
+        </article>
+
         <article className="surface runtime-panel scenario-panel">
           <div className="surface-heading">
             <div>
@@ -2604,6 +3126,15 @@ function App() {
               <RefreshCw size={16} />
               {t.refresh}
             </button>
+          </div>
+          <p className="hint-text">{lang === "ru"
+            ? "Порядок применения: сценарий ответа выше правил полей, затем OpenAPI example или генерация по schema."
+            : "Apply order: response scenario wins over field rules, then OpenAPI example or schema generation."}</p>
+          <div className="preset-row">
+            <button className="soft-button" onClick={() => applyScenarioPreset("success")} disabled={!canWrite}>{lang === "ru" ? "Успешный заказ" : "Success order"}</button>
+            <button className="soft-button" onClick={() => applyScenarioPreset("payment-error")} disabled={!canWrite}>{lang === "ru" ? "Ошибка оплаты" : "Payment error"}</button>
+            <button className="soft-button" onClick={() => applyScenarioPreset("empty-list")} disabled={!canWrite}>{lang === "ru" ? "Пустой список" : "Empty list"}</button>
+            <button className="soft-button" onClick={() => applyScenarioPreset("delay")} disabled={!canWrite}>{lang === "ru" ? "Задержка" : "Delay"}</button>
           </div>
           <div className="scenario-form">
             <label>{lang === "ru" ? "Название" : "Name"}<input value={scenarioName} onChange={(event) => setScenarioName(event.target.value)} disabled={!canWrite} /></label>
@@ -2651,6 +3182,87 @@ function App() {
               </div>
             ))}
             {scenarios.length === 0 && <EmptyState icon={<Braces size={28} />} text={lang === "ru" ? "Сценарии пока не настроены." : "No scenarios configured yet."} compact />}
+          </div>
+        </article>
+
+        <article className="surface runtime-panel smart-response-panel">
+          <div className="surface-heading">
+            <div>
+              <p className="eyebrow">Smart responses</p>
+              <h2>{lang === "ru" ? "Правила полей ответа" : "Response field rules"}</h2>
+            </div>
+            <button className="soft-button" onClick={() => selectedInstance && refreshResponseRules(selectedInstance.id)} disabled={!selectedInstance}>
+              <RefreshCw size={16} />
+              {t.refresh}
+            </button>
+          </div>
+          <p className="hint-text">{lang === "ru"
+            ? "Правила меняют уже выбранный ответ. Шаблоны: {{path.id}}, {{query.name}}, {{header.x-trace-id}}, {{uuid}}."
+            : "Rules modify the selected response. Templates: {{path.id}}, {{query.name}}, {{header.x-trace-id}}, {{uuid}}."}</p>
+          <div className="preset-row">
+            <button className="soft-button" onClick={() => applyRulePreset("random-price")} disabled={!canWrite}>{lang === "ru" ? "Случайная цена" : "Random price"}</button>
+            <button className="soft-button" onClick={() => applyRulePreset("template-email")} disabled={!canWrite}>{lang === "ru" ? "Email из запроса" : "Request email"}</button>
+          </div>
+          <div className="scenario-form response-rule-form">
+            <label>{lang === "ru" ? "Название" : "Name"}<input value={ruleName} onChange={(event) => setRuleName(event.target.value)} disabled={!canWrite} /></label>
+            <label>{lang === "ru" ? "Операция" : "Operation"}
+              <select value={`${ruleMethod} ${rulePathTemplate}`} onChange={(event) => {
+                const [method, ...pathParts] = event.target.value.split(" ");
+                const pathTemplate = pathParts.join(" ");
+                const route = contractRoutes.find((item) => item.method === method && item.pathTemplate === pathTemplate);
+                setRuleMethod(method);
+                setRulePathTemplate(pathTemplate);
+                setRuleOperationId(route?.operationId ?? "");
+              }} disabled={!canWrite}>
+                <option value={`${ruleMethod} ${rulePathTemplate}`}>{ruleMethod} {rulePathTemplate}</option>
+                {contractRoutes.map((route) => (
+                  <option value={`${route.method} ${route.pathTemplate}`} key={`rule-${route.method}-${route.pathTemplate}`}>{route.method} {route.pathTemplate}</option>
+                ))}
+              </select>
+            </label>
+            <label>JSON path<input value={ruleFieldPath} onChange={(event) => setRuleFieldPath(event.target.value)} placeholder="customer.email" disabled={!canWrite} /></label>
+            <label>{lang === "ru" ? "Тип правила" : "Rule type"}
+              <select value={ruleType} onChange={(event) => setRuleType(event.target.value)} disabled={!canWrite}>
+                <option value="FIXED">{ruleTypeLabel("FIXED", lang)}</option>
+                <option value="RANDOM_INT">{ruleTypeLabel("RANDOM_INT", lang)}</option>
+                <option value="ENUM">{ruleTypeLabel("ENUM", lang)}</option>
+                <option value="TEMPLATE">{ruleTypeLabel("TEMPLATE", lang)}</option>
+              </select>
+            </label>
+            {ruleType === "FIXED" && <label>Value<input value={ruleFixedValue} onChange={(event) => setRuleFixedValue(event.target.value)} disabled={!canWrite} /></label>}
+            {ruleType === "RANDOM_INT" && (
+              <>
+                <label>Min<input type="number" value={ruleMinValue} onChange={(event) => setRuleMinValue(Number(event.target.value))} disabled={!canWrite} /></label>
+                <label>Max<input type="number" value={ruleMaxValue} onChange={(event) => setRuleMaxValue(Number(event.target.value))} disabled={!canWrite} /></label>
+              </>
+            )}
+            {ruleType === "ENUM" && <label>Values<input value={ruleEnumValues} onChange={(event) => setRuleEnumValues(event.target.value)} disabled={!canWrite} /></label>}
+            {ruleType === "TEMPLATE" && <label>Template<input value={ruleTemplate} onChange={(event) => setRuleTemplate(event.target.value)} disabled={!canWrite} /></label>}
+            <label>Priority<input type="number" value={rulePriority} onChange={(event) => setRulePriority(Number(event.target.value))} disabled={!canWrite} /></label>
+            <label className="check-row">
+              <input type="checkbox" checked={ruleEnabled} onChange={(event) => setRuleEnabled(event.target.checked)} disabled={!canWrite} />
+              Enabled
+            </label>
+            <button className="primary-button" onClick={saveResponseRule} disabled={!selectedInstance || !canWrite || busy["response-rule-save"]}>
+              {busy["response-rule-save"] ? <Loader2 className="spin" size={16} /> : <Play size={16} />}
+              {editingRuleId ? t.save : lang === "ru" ? "Добавить правило" : "Add rule"}
+            </button>
+          </div>
+          <div className="stack-list panel-scroll">
+            {responseRules.map((rule) => (
+              <div className="scenario-card" key={rule.id}>
+                <div>
+                  <strong>{rule.name}</strong>
+                  <small>{rule.enabled ? "ON" : "OFF"} В· p{rule.priority} В· {rule.method ?? "-"} {rule.pathTemplate ?? rule.operationId ?? "-"}</small>
+                  <small>{rule.fieldPath} · {ruleTypeLabel(rule.type, lang)}</small>
+                </div>
+                <div className="card-actions">
+                  <button className="soft-button" onClick={() => editResponseRule(rule)} disabled={!canWrite}>{t.save}</button>
+                  <button className="icon-button danger-icon" onClick={() => deleteResponseRule(rule.id)} disabled={!canWrite}><Trash2 size={16} /></button>
+                </div>
+              </div>
+            ))}
+            {responseRules.length === 0 && <EmptyState icon={<Braces size={28} />} text={lang === "ru" ? "Правила ответа пока не настроены." : "No response rules configured yet."} compact />}
           </div>
         </article>
 
@@ -2711,6 +3323,21 @@ function App() {
               <option value="MATCHED">{t.matched}</option>
               <option value="UNMATCHED">{t.unmatched}</option>
             </select>
+            <select value={logStatusFilter} onChange={(event) => setLogStatusFilter(event.target.value)}>
+              <option value="ALL">Status: ALL</option>
+              <option value="2xx">2xx</option>
+              <option value="4xx">4xx</option>
+              <option value="5xx">5xx</option>
+            </select>
+            <select value={logSourceFilter} onChange={(event) => setLogSourceFilter(event.target.value)}>
+              <option value="ALL">{lang === "ru" ? "Источник: ALL" : "Source: ALL"}</option>
+              <option value="SCENARIO">{sourceLabel("SCENARIO", lang)}</option>
+              <option value="RESPONSE_RULE">{sourceLabel("RESPONSE_RULE", lang)}</option>
+              <option value="OPENAPI_EXAMPLE">{sourceLabel("OPENAPI_EXAMPLE", lang)}</option>
+              <option value="SCHEMA_GENERATED">{sourceLabel("SCHEMA_GENERATED", lang)}</option>
+              <option value="STATEFUL">{sourceLabel("STATEFUL", lang)}</option>
+              <option value="FALLBACK">{sourceLabel("FALLBACK", lang)}</option>
+            </select>
             <button className="soft-button" onClick={() => refreshLogs()} disabled={!selectedInstance}><RefreshCw size={16} />{t.refresh}</button>
           </div>
         </div>
@@ -2721,6 +3348,7 @@ function App() {
               <strong>{log.path}</strong>
               <span>{log.responseStatus}</span>
               <span>{log.latencyMs}ms</span>
+              <span className="source-chip">{sourceLabel(log.responseSource, lang)}</span>
               <StatusPill ok={log.matched} text={log.matched ? t.matched : t.unmatched} />
             </button>
           ))}
@@ -2907,9 +3535,12 @@ function App() {
             <div className="admin-kpis">
               <Detail label="Invalid specs" value={String(adminSummary.invalidSpecVersions)} />
               <Detail label="Running instances" value={String(adminSummary.runningInstances)} />
+              <Detail label="Runtime workers" value={String(adminSummary.runtimeWorkers)} />
               <Detail label="Runtime slots" value={String(adminSummary.runtimeSlots)} />
               <Detail label="5xx errors" value={String(adminSummary.serverErrors)} />
               <Detail label="Unmatched" value={String(adminSummary.unmatchedRequests)} />
+              <Detail label="Unmatched ratio" value={`${adminSummary.unmatchedRatio}%`} />
+              <Detail label="Rate-limit events" value={String(adminSummary.rateLimitEvents)} />
               <Detail label="Avg latency" value={`${adminSummary.averageLatencyMs}ms`} />
             </div>
           )}
@@ -3087,6 +3718,7 @@ function App() {
                 </span>
                 <span>{log.responseStatus}</span>
                 <span>{log.latencyMs}ms</span>
+                <span className="source-chip">{sourceLabel(log.responseSource, lang)}</span>
                 <StatusPill ok={log.matched} text={log.matched ? t.matched : t.unmatched} />
               </div>
             ))}
@@ -3235,6 +3867,29 @@ function StatusPill({ ok, text }: { ok: boolean; text: string }) {
   return <span className={cx("status-pill", ok ? "success" : "danger")}>{text}</span>;
 }
 
+function sourceLabel(source: string | null | undefined, lang: Lang) {
+  const labels: Record<string, { ru: string; en: string }> = {
+    SCENARIO: { ru: "Сценарий", en: "Scenario" },
+    RESPONSE_RULE: { ru: "Правило поля", en: "Field rule" },
+    OPENAPI_EXAMPLE: { ru: "OpenAPI example", en: "OpenAPI example" },
+    SCHEMA_GENERATED: { ru: "Генерация по схеме", en: "Schema generated" },
+    STATEFUL: { ru: "Stateful CRUD", en: "Stateful CRUD" },
+    FALLBACK: { ru: "Fallback", en: "Fallback" }
+  };
+  const item = labels[source ?? "FALLBACK"] ?? labels.FALLBACK;
+  return item[lang];
+}
+
+function ruleTypeLabel(type: string, lang: Lang) {
+  const labels: Record<string, { ru: string; en: string }> = {
+    FIXED: { ru: "Фиксированное значение", en: "Fixed value" },
+    RANDOM_INT: { ru: "Случайное число", en: "Random integer" },
+    ENUM: { ru: "Выбор из списка", en: "Enum choice" },
+    TEMPLATE: { ru: "Шаблонная строка", en: "Template string" }
+  };
+  return (labels[type] ?? labels.FIXED)[lang];
+}
+
 function RoleBadge({ role }: { role: ProjectRole }) {
   return (
     <span className={cx("role-badge", role.toLowerCase())}>
@@ -3349,6 +4004,10 @@ function paginate<T>(items: T[], page: number, size: number) {
     total: items.length,
     totalPages
   };
+}
+
+function routeKey(route: ContractRoute) {
+  return `${route.method} ${route.pathTemplate}`;
 }
 
 function displayUser(value: { username?: string | null; email?: string | null }) {

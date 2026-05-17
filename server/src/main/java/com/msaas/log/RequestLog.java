@@ -5,7 +5,9 @@ import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 @Document("request_logs")
@@ -27,6 +29,9 @@ public class RequestLog {
     private int responseStatus;
     private boolean matched;
     private String error;
+    private String responseSource;
+    private String profileName;
+    private List<String> appliedRuleIds = new ArrayList<>();
     private long latencyMs;
     private Instant receivedAt;
 
@@ -128,6 +133,33 @@ public class RequestLog {
 
     public void setError(String error) {
         this.error = error;
+    }
+
+    public String getResponseSource() {
+        return responseSource == null || responseSource.isBlank() ? ResponseSource.FALLBACK.name() : responseSource;
+    }
+
+    public void setResponseSource(String responseSource) {
+        this.responseSource = responseSource;
+    }
+
+    public String getProfileName() {
+        return profileName;
+    }
+
+    public void setProfileName(String profileName) {
+        this.profileName = profileName;
+    }
+
+    public List<String> getAppliedRuleIds() {
+        if (appliedRuleIds == null) {
+            appliedRuleIds = new ArrayList<>();
+        }
+        return appliedRuleIds;
+    }
+
+    public void setAppliedRuleIds(List<String> appliedRuleIds) {
+        this.appliedRuleIds = appliedRuleIds == null ? new ArrayList<>() : appliedRuleIds;
     }
 
     public long getLatencyMs() {

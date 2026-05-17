@@ -38,7 +38,17 @@ public class MockInstance {
     private boolean rateLimitEnabled = true;
     private int rateLimitRequests = 120;
     private int rateLimitWindowSeconds = 60;
+    private Boolean smartResponsesEnabled = true;
+    private String smartSeedMode = "STABLE";
     private List<MockScenario> scenarios = new ArrayList<>();
+    private List<ResponseRule> responseRules = new ArrayList<>();
+    private boolean faultProfileEnabled;
+    private int faultErrorRate;
+    private int faultStatusCode = 500;
+    private int latencyMinMs;
+    private int latencyMaxMs;
+    private String activeProfile = "dev";
+    private List<MockProfile> profiles;
     private String workerKey;
     private Instant assignedAt;
     private Instant createdAt;
@@ -78,6 +88,10 @@ public class MockInstance {
         this.rateLimitEnabled = true;
         this.rateLimitRequests = 120;
         this.rateLimitWindowSeconds = 60;
+        this.smartResponsesEnabled = true;
+        this.smartSeedMode = "STABLE";
+        this.profiles = defaultProfiles();
+        activateProfileSettings(activeProfile());
         this.createdAt = Instant.now();
         this.updatedAt = this.createdAt;
     }
@@ -219,6 +233,22 @@ public class MockInstance {
         this.rateLimitWindowSeconds = rateLimitWindowSeconds <= 0 ? 60 : rateLimitWindowSeconds;
     }
 
+    public boolean isSmartResponsesEnabled() {
+        return smartResponsesEnabled == null || smartResponsesEnabled;
+    }
+
+    public void setSmartResponsesEnabled(boolean smartResponsesEnabled) {
+        this.smartResponsesEnabled = smartResponsesEnabled;
+    }
+
+    public String getSmartSeedMode() {
+        return smartSeedMode == null || smartSeedMode.isBlank() ? "STABLE" : smartSeedMode;
+    }
+
+    public void setSmartSeedMode(String smartSeedMode) {
+        this.smartSeedMode = smartSeedMode == null || smartSeedMode.isBlank() ? "STABLE" : smartSeedMode;
+    }
+
     public List<MockScenario> getScenarios() {
         if (scenarios == null) {
             scenarios = new ArrayList<>();
@@ -228,6 +258,107 @@ public class MockInstance {
 
     public void setScenarios(List<MockScenario> scenarios) {
         this.scenarios = scenarios == null ? new ArrayList<>() : scenarios;
+    }
+
+    public List<ResponseRule> getResponseRules() {
+        if (responseRules == null) {
+            responseRules = new ArrayList<>();
+        }
+        return responseRules;
+    }
+
+    public void setResponseRules(List<ResponseRule> responseRules) {
+        this.responseRules = responseRules == null ? new ArrayList<>() : responseRules;
+    }
+
+    public boolean isFaultProfileEnabled() {
+        return faultProfileEnabled;
+    }
+
+    public void setFaultProfileEnabled(boolean faultProfileEnabled) {
+        this.faultProfileEnabled = faultProfileEnabled;
+    }
+
+    public int getFaultErrorRate() {
+        return Math.max(0, Math.min(100, faultErrorRate));
+    }
+
+    public void setFaultErrorRate(int faultErrorRate) {
+        this.faultErrorRate = Math.max(0, Math.min(100, faultErrorRate));
+    }
+
+    public int getFaultStatusCode() {
+        return faultStatusCode < 400 || faultStatusCode > 599 ? 500 : faultStatusCode;
+    }
+
+    public void setFaultStatusCode(int faultStatusCode) {
+        this.faultStatusCode = faultStatusCode < 400 || faultStatusCode > 599 ? 500 : faultStatusCode;
+    }
+
+    public int getLatencyMinMs() {
+        return Math.max(0, latencyMinMs);
+    }
+
+    public void setLatencyMinMs(int latencyMinMs) {
+        this.latencyMinMs = Math.max(0, latencyMinMs);
+    }
+
+    public int getLatencyMaxMs() {
+        return Math.max(getLatencyMinMs(), latencyMaxMs);
+    }
+
+    public void setLatencyMaxMs(int latencyMaxMs) {
+        this.latencyMaxMs = Math.max(0, latencyMaxMs);
+    }
+
+    public String getActiveProfile() {
+        return activeProfile == null || activeProfile.isBlank() ? "dev" : activeProfile;
+    }
+
+    public void setActiveProfile(String activeProfile) {
+        this.activeProfile = activeProfile == null || activeProfile.isBlank() ? "dev" : activeProfile;
+    }
+
+    public String getActiveProfileName() {
+        return activeProfile().getName();
+    }
+
+    public List<MockProfile> getProfiles() {
+        if (profiles == null) {
+            profiles = defaultProfiles();
+        }
+        return profiles;
+    }
+
+    public void setProfiles(List<MockProfile> profiles) {
+        this.profiles = profiles == null ? new ArrayList<>() : profiles;
+    }
+
+    public MockProfile activeProfile() {
+        return getProfiles().stream()
+                .filter(profile -> getActiveProfile().equals(profile.getId()) || getActiveProfile().equalsIgnoreCase(profile.getName()))
+                .findFirst()
+                .orElseGet(() -> new MockProfile(getActiveProfile(), getActiveProfile(), isFaultProfileEnabled(), getFaultErrorRate(), getFaultStatusCode(), getLatencyMinMs(), getLatencyMaxMs()));
+    }
+
+    public void activateProfileSettings(MockProfile profile) {
+        if (profile == null) {
+            return;
+        }
+        setActiveProfile(profile.getId());
+        setFaultProfileEnabled(profile.isFaultProfileEnabled());
+        setFaultErrorRate(profile.getFaultErrorRate());
+        setFaultStatusCode(profile.getFaultStatusCode());
+        setLatencyMinMs(profile.getLatencyMinMs());
+        setLatencyMaxMs(profile.getLatencyMaxMs());
+    }
+
+    public static List<MockProfile> defaultProfiles() {
+        List<MockProfile> defaults = new ArrayList<>();
+        defaults.add(new MockProfile("dev", "dev", false, 0, 500, 0, 0));
+        defaults.add(new MockProfile("qa", "qa", true, 10, 500, 150, 600));
+        defaults.add(new MockProfile("demo", "demo", false, 0, 500, 80, 220));
+        return defaults;
     }
 
     public String getWorkerKey() {

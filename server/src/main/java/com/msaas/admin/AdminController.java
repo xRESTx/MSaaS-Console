@@ -100,10 +100,13 @@ public class AdminController {
                 specVersionRepository.countByStatus(ValidationStatus.INVALID),
                 instanceRepository.count(),
                 instanceRepository.findByStatus(InstanceStatus.RUNNING).size(),
+                runtimePlaneService.workers().size(),
                 runtimePlaneService.slots().size(),
                 logCount,
                 requestLogRepository.countByResponseStatusGreaterThanEqual(500),
                 requestLogRepository.countByMatchedFalse(),
+                requestLogRepository.countByError("Rate limit exceeded"),
+                logCount == 0 ? 0 : Math.round((requestLogRepository.countByMatchedFalse() * 1000.0) / logCount) / 10.0,
                 Math.round(averageLatencyMs)
         );
     }
@@ -378,10 +381,13 @@ public class AdminController {
             long invalidSpecVersions,
             long instances,
             long runningInstances,
+            long runtimeWorkers,
             long runtimeSlots,
             long requestLogs,
             long serverErrors,
             long unmatchedRequests,
+            long rateLimitEvents,
+            double unmatchedRatio,
             long averageLatencyMs
     ) {
     }
@@ -475,6 +481,9 @@ public class AdminController {
             int responseStatus,
             boolean matched,
             String error,
+            String responseSource,
+            String profileName,
+            List<String> appliedRuleIds,
             long latencyMs,
             Instant receivedAt
     ) {
@@ -493,6 +502,9 @@ public class AdminController {
                     log.getResponseStatus(),
                     log.isMatched(),
                     log.getError(),
+                    log.getResponseSource(),
+                    log.getProfileName(),
+                    log.getAppliedRuleIds(),
                     log.getLatencyMs(),
                     log.getReceivedAt()
             );

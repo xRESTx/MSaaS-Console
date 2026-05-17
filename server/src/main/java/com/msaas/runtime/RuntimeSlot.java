@@ -2,7 +2,9 @@ package com.msaas.runtime;
 
 import com.msaas.instance.InstanceMode;
 import com.msaas.instance.MockInstance;
+import com.msaas.instance.MockProfile;
 import com.msaas.instance.MockScenario;
+import com.msaas.instance.ResponseRule;
 import com.msaas.spec.contract.NormalizedContract;
 
 import java.time.Instant;
@@ -28,7 +30,18 @@ public class RuntimeSlot {
     private final boolean rateLimitEnabled;
     private final int rateLimitRequests;
     private final int rateLimitWindowSeconds;
+    private final boolean smartResponsesEnabled;
+    private final String smartSeedMode;
     private final List<MockScenario> scenarios;
+    private final List<ResponseRule> responseRules;
+    private final boolean faultProfileEnabled;
+    private final int faultErrorRate;
+    private final int faultStatusCode;
+    private final int latencyMinMs;
+    private final int latencyMaxMs;
+    private final String activeProfile;
+    private final String activeProfileName;
+    private final List<MockProfile> profiles;
     private final Instant loadedAt;
     private final Instant instanceUpdatedAt;
     private final AtomicReference<Instant> lastAccessedAt;
@@ -48,7 +61,18 @@ public class RuntimeSlot {
         this.rateLimitEnabled = instance.isRateLimitEnabled();
         this.rateLimitRequests = instance.getRateLimitRequests();
         this.rateLimitWindowSeconds = instance.getRateLimitWindowSeconds();
+        this.smartResponsesEnabled = instance.isSmartResponsesEnabled();
+        this.smartSeedMode = instance.getSmartSeedMode();
         this.scenarios = new ArrayList<>(instance.getScenarios());
+        this.responseRules = new ArrayList<>(instance.getResponseRules());
+        this.faultProfileEnabled = instance.isFaultProfileEnabled();
+        this.faultErrorRate = instance.getFaultErrorRate();
+        this.faultStatusCode = instance.getFaultStatusCode();
+        this.latencyMinMs = instance.getLatencyMinMs();
+        this.latencyMaxMs = instance.getLatencyMaxMs();
+        this.activeProfile = instance.getActiveProfile();
+        this.activeProfileName = instance.getActiveProfileName();
+        this.profiles = new ArrayList<>(instance.getProfiles());
         this.loadedAt = Instant.now();
         this.lastAccessedAt = new AtomicReference<>(loadedAt);
         this.instanceUpdatedAt = instance.getUpdatedAt();
@@ -102,8 +126,52 @@ public class RuntimeSlot {
         return rateLimitWindowSeconds;
     }
 
+    public boolean isSmartResponsesEnabled() {
+        return smartResponsesEnabled;
+    }
+
+    public String getSmartSeedMode() {
+        return smartSeedMode;
+    }
+
     public List<MockScenario> getScenarios() {
         return scenarios;
+    }
+
+    public List<ResponseRule> getResponseRules() {
+        return responseRules;
+    }
+
+    public boolean isFaultProfileEnabled() {
+        return faultProfileEnabled;
+    }
+
+    public int getFaultErrorRate() {
+        return faultErrorRate;
+    }
+
+    public int getFaultStatusCode() {
+        return faultStatusCode;
+    }
+
+    public int getLatencyMinMs() {
+        return latencyMinMs;
+    }
+
+    public int getLatencyMaxMs() {
+        return latencyMaxMs;
+    }
+
+    public String getActiveProfile() {
+        return activeProfile;
+    }
+
+    public String getActiveProfileName() {
+        return activeProfileName;
+    }
+
+    public List<MockProfile> getProfiles() {
+        return profiles;
     }
 
     public Instant getLoadedAt() {

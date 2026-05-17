@@ -8,6 +8,7 @@ import com.msaas.instance.MockScenario;
 import com.msaas.log.LogRedactor;
 import com.msaas.log.RequestLog;
 import com.msaas.log.RequestLogRepository;
+import com.msaas.log.ResponseSource;
 import com.msaas.security.SecretHashService;
 import com.msaas.spec.contract.MockResponseDefinition;
 import com.msaas.spec.contract.MockRoute;
@@ -32,6 +33,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.ConcurrentMap;
 
 @RestController
@@ -46,6 +48,8 @@ public class MockRuntimeController {
     private final LogRedactor logRedactor;
     private final MockRateLimiter rateLimiter;
     private final TemplateRenderer templateRenderer;
+    private final SchemaResponseGenerator schemaResponseGenerator;
+    private final ResponseRuleApplier responseRuleApplier;
     private final MockStateStore stateStore;
     private final RuntimePlaneService runtimePlaneService;
     private final MockGatewayService gatewayService;
@@ -59,6 +63,8 @@ public class MockRuntimeController {
             LogRedactor logRedactor,
             MockRateLimiter rateLimiter,
             TemplateRenderer templateRenderer,
+            SchemaResponseGenerator schemaResponseGenerator,
+            ResponseRuleApplier responseRuleApplier,
             MockStateStore stateStore,
             RuntimePlaneService runtimePlaneService,
             MockGatewayService gatewayService
@@ -71,6 +77,8 @@ public class MockRuntimeController {
         this.logRedactor = logRedactor;
         this.rateLimiter = rateLimiter;
         this.templateRenderer = templateRenderer;
+        this.schemaResponseGenerator = schemaResponseGenerator;
+        this.responseRuleApplier = responseRuleApplier;
         this.stateStore = stateStore;
         this.runtimePlaneService = runtimePlaneService;
         this.gatewayService = gatewayService;
@@ -121,9 +129,11 @@ public class MockRuntimeController {
         log.setRequestBody(logRedactor.redactBody(requestBody));
 
         ResponseEntity<Object> response = null;
+        ResponseOutcome outcome = null;
         try {
             if (!validApiKey(slot, request)) {
                 response = ResponseEntity.status(401).body(Map.of("error", "Mock API key is required"));
+                outcome = outcome(response, ResponseSource.FALLBACK, slot, List.of(), "Invalid mock API key");
                 log.setMatched(false);
                 log.setError("Invalid mock API key");
                 return response;
@@ -134,6 +144,7 @@ public class MockRuntimeController {
                 response = ResponseEntity.status(429)
                         .header("Retry-After", String.valueOf(rateLimit.retryAfterSeconds()))
                         .body(Map.of("error", "Rate limit exceeded", "retryAfterSeconds", rateLimit.retryAfterSeconds()));
+                outcome = outcome(response, ResponseSource.FALLBACK, slot, List.of(), "Rate limit exceeded");
                 log.setMatched(false);
                 log.setError("Rate limit exceeded");
                 return response;
@@ -158,17 +169,33 @@ public class MockRuntimeController {
                     body.put("hints", routeMatcher.mismatchHints(slot.getContract(), request.getMethod(), mockPath, queryParameters, headers, requestBody));
                 }
                 response = ResponseEntity.status(404).body(body);
+                outcome = outcome(response, ResponseSource.FALLBACK, slot, List.of(), "No matching route");
                 log.setMatched(false);
                 log.setError("No matching route");
             } else {
                 log.setMatched(true);
-                response = respond(slot, match.get(), request.getMethod(), requestBody, queryParameters, headers, directive);
+                applyProfileLatency(slot);
+                Optional<ResponseOutcome> fault = faultProfileResponse(slot);
+                if (fault.isPresent()) {
+                    outcome = fault.get();
+                    response = outcome.response();
+                    log.setError(outcome.error());
+                } else {
+                    outcome = respond(slot, match.get(), request.getMethod(), mockPath, requestBody, queryParameters, headers, directive);
+                    response = outcome.response();
+                }
             }
             return response;
         } finally {
             try {
                 int status = response == null ? 500 : response.getStatusCode().value();
                 log.setResponseStatus(status);
+                log.setResponseSource(outcome == null ? ResponseSource.FALLBACK.name() : outcome.responseSource().name());
+                log.setProfileName(outcome == null || outcome.profileName() == null ? slot.getActiveProfileName() : outcome.profileName());
+                log.setAppliedRuleIds(outcome == null ? List.of() : outcome.appliedRuleIds());
+                if (log.getError() == null && outcome != null) {
+                    log.setError(outcome.error());
+                }
                 log.setLatencyMs(Duration.between(startedAt, Instant.now()).toMillis());
                 requestLogRepository.save(log);
             } finally {
@@ -184,29 +211,30 @@ public class MockRuntimeController {
         return secretHashService.matches(request.getHeader("X-Mock-Api-Key"), slot.getApiKeyHash());
     }
 
-    private ResponseEntity<Object> respond(
+    private ResponseOutcome respond(
             RuntimeSlot slot,
             RouteMatch match,
             String method,
+            String mockPath,
             String requestBody,
             Map<String, List<String>> queryParameters,
             Map<String, String> headers,
             ResponseDirective directive
     ) {
-        Optional<ResponseEntity<Object>> scenario = scenarioResponse(slot, match, requestBody, queryParameters, headers, directive);
+        Optional<ResponseOutcome> scenario = scenarioResponse(slot, match, requestBody, queryParameters, headers, directive);
         if (scenario.isPresent()) {
             return scenario.get();
         }
         if (slot.getMode() == InstanceMode.STATEFUL) {
-            Optional<ResponseEntity<Object>> stateful = statefulResponse(slot, match, method, requestBody, queryParameters, headers, directive);
+            Optional<ResponseOutcome> stateful = statefulResponse(slot, match, method, requestBody, queryParameters, headers, directive);
             if (stateful.isPresent()) {
                 return stateful.get();
             }
         }
-        return responseFromDefinition(selectResponse(match.route(), directive), match, requestBody, queryParameters, headers, directive);
+        return responseFromDefinition(slot, selectResponse(match.route(), directive), match, mockPath, requestBody, queryParameters, headers, directive);
     }
 
-    private Optional<ResponseEntity<Object>> scenarioResponse(
+    private Optional<ResponseOutcome> scenarioResponse(
             RuntimeSlot slot,
             RouteMatch match,
             String requestBody,
@@ -227,7 +255,8 @@ public class MockRuntimeController {
                     responseHeaders.setContentType(parseMediaType(scenario.getContentType()));
                     scenario.getHeaders().forEach((name, value) -> responseHeaders.set(name, String.valueOf(templateRenderer.render(value, match.variables(), queryParameters, headers, requestBody))));
                     int status = directive.statusCode().orElse(scenario.getStatusCode() == null ? match.route().getDefaultStatusCode() : scenario.getStatusCode());
-                    return ResponseEntity.status(HttpStatusCode.valueOf(status)).headers(responseHeaders).body(body);
+                    ResponseEntity<Object> response = ResponseEntity.status(HttpStatusCode.valueOf(status)).headers(responseHeaders).body(body);
+                    return outcome(response, ResponseSource.SCENARIO, slot, List.of(), null);
                 });
     }
 
@@ -241,7 +270,7 @@ public class MockRuntimeController {
         return methodMatches && pathMatches;
     }
 
-    private Optional<ResponseEntity<Object>> statefulResponse(
+    private Optional<ResponseOutcome> statefulResponse(
             RuntimeSlot slot,
             RouteMatch match,
             String method,
@@ -287,15 +316,15 @@ public class MockRuntimeController {
             MockResponseDefinition definition = preferredResponse(route, directive.statusCode().orElse(204));
             if (definition.getStatusCode() == 204 || definition.getBody() == null) {
                 delay(effectiveDelayMs(definition, directive));
-                return Optional.of(ResponseEntity.status(204).build());
+                return Optional.of(outcome(ResponseEntity.status(204).body(null), ResponseSource.STATEFUL, slot, List.of(), null));
             }
-            return Optional.of(responseFromDefinition(definition, match, requestBody, queryParameters, headers, directive));
+                return Optional.of(responseFromDefinition(slot, definition, match, route.getPathTemplate(), requestBody, queryParameters, headers, directive));
         }
 
         return Optional.empty();
     }
 
-    private ResponseEntity<Object> responseWithBody(
+    private ResponseOutcome responseWithBody(
             MockRoute route,
             int preferredStatus,
             Object body,
@@ -308,14 +337,17 @@ public class MockRuntimeController {
         MockResponseDefinition definition = preferredResponse(route, preferredStatus);
         delay(effectiveDelayMs(definition, directive));
         HttpHeaders responseHeaders = headers(definition);
-        return ResponseEntity.status(HttpStatusCode.valueOf(definition.getStatusCode()))
+        ResponseEntity<Object> response = ResponseEntity.status(HttpStatusCode.valueOf(definition.getStatusCode()))
                 .headers(responseHeaders)
                 .body(templateRenderer.render(body, match.variables(), queryParameters, requestHeaders, requestBody));
+        return outcome(response, ResponseSource.STATEFUL, null, List.of(), null);
     }
 
-    private ResponseEntity<Object> responseFromDefinition(
+    private ResponseOutcome responseFromDefinition(
+            RuntimeSlot slot,
             MockResponseDefinition definition,
             RouteMatch match,
+            String mockPath,
             String requestBody,
             Map<String, List<String>> queryParameters,
             Map<String, String> requestHeaders,
@@ -323,9 +355,15 @@ public class MockRuntimeController {
     ) {
         delay(effectiveDelayMs(definition, directive));
         HttpHeaders responseHeaders = headers(definition);
-        return ResponseEntity.status(HttpStatusCode.valueOf(definition.getStatusCode()))
+        String seed = effectiveSeed(slot, definition, match, mockPath, queryParameters, directive);
+        BodySelection body = bodyFromDefinition(slot, definition, seed);
+        Object rendered = templateRenderer.render(body.body(), match.variables(), queryParameters, requestHeaders, requestBody);
+        ResponseRuleApplier.AppliedResponse ruled = responseRuleApplier.applyWithMetadata(rendered, slot.getResponseRules(), match, requestBody, queryParameters, requestHeaders, seed);
+        ResponseSource source = ruled.appliedRuleIds().isEmpty() ? body.source() : ResponseSource.RESPONSE_RULE;
+        ResponseEntity<Object> response = ResponseEntity.status(HttpStatusCode.valueOf(definition.getStatusCode()))
                 .headers(responseHeaders)
-                .body(templateRenderer.render(definition.getBody(), match.variables(), queryParameters, requestHeaders, requestBody));
+                .body(ruled.body());
+        return outcome(response, source, slot, ruled.appliedRuleIds(), null);
     }
 
     private MockResponseDefinition selectResponse(MockRoute route, ResponseDirective directive) {
@@ -338,6 +376,21 @@ public class MockRuntimeController {
             }
         }
         return definition;
+    }
+
+    private BodySelection bodyFromDefinition(RuntimeSlot slot, MockResponseDefinition definition, String seed) {
+        MockResponseDefinition.ResponseContent content = definition.getContents().get(definition.getContentType());
+        if (slot.isSmartResponsesEnabled()
+                && definition.getBody() == null
+                && content != null
+                && content.getSchema() != null
+                && !content.isExplicitExample()) {
+            return new BodySelection(schemaResponseGenerator.generate(content.getSchema(), seed), ResponseSource.SCHEMA_GENERATED);
+        }
+        if (definition.getBody() == null) {
+            return new BodySelection(Map.of("ok", true), ResponseSource.FALLBACK);
+        }
+        return new BodySelection(definition.getBody(), ResponseSource.OPENAPI_EXAMPLE);
     }
 
     private MockResponseDefinition selectContent(MockResponseDefinition definition, Optional<String> acceptHeader) {
@@ -479,7 +532,9 @@ public class MockRuntimeController {
                 .filter(value -> !value.isBlank());
         boolean debug = "true".equalsIgnoreCase(firstPresent(request.getParameter("__debug"), request.getHeader("X-Mock-Debug")));
         Optional<String> acceptHeader = Optional.ofNullable(request.getHeader("Accept")).filter(value -> !value.isBlank());
-        return new ResponseDirective(status, delay, example, debug, acceptHeader);
+        Optional<String> seed = Optional.ofNullable(firstPresent(request.getParameter("__seed"), request.getHeader("X-Mock-Seed")))
+                .filter(value -> !value.isBlank());
+        return new ResponseDirective(status, delay, example, debug, acceptHeader, seed);
     }
 
     private String clientIp(HttpServletRequest request) {
@@ -492,6 +547,82 @@ public class MockRuntimeController {
 
     private long effectiveDelayMs(MockResponseDefinition definition, ResponseDirective directive) {
         return directive.delayMs().orElse(definition.getDelayMs());
+    }
+
+    private String effectiveSeed(
+            RuntimeSlot slot,
+            MockResponseDefinition definition,
+            RouteMatch match,
+            String mockPath,
+            Map<String, List<String>> queryParameters,
+            ResponseDirective directive
+    ) {
+        if (directive.seed().isPresent()) {
+            return directive.seed().get();
+        }
+        if ("RANDOM".equalsIgnoreCase(slot.getSmartSeedMode())) {
+            return UUID.randomUUID().toString();
+        }
+        return String.join(":",
+                slot.getInstanceId(),
+                Optional.ofNullable(match.route().getOperationId()).orElse(match.route().getMethod() + " " + match.route().getPathTemplate()),
+                String.valueOf(definition.getStatusCode()),
+                mockPath == null ? match.route().getPathTemplate() : mockPath,
+                querySeed(queryParameters)
+        );
+    }
+
+    private String querySeed(Map<String, List<String>> queryParameters) {
+        if (queryParameters == null || queryParameters.isEmpty()) {
+            return "";
+        }
+        return queryParameters.entrySet().stream()
+                .filter(entry -> !entry.getKey().startsWith("__"))
+                .sorted(Map.Entry.comparingByKey())
+                .map(entry -> entry.getKey() + "=" + String.join(",", entry.getValue()))
+                .reduce((left, right) -> left + "&" + right)
+                .orElse("");
+    }
+
+    private Optional<ResponseOutcome> faultProfileResponse(RuntimeSlot slot) {
+        if (!slot.isFaultProfileEnabled() || slot.getFaultErrorRate() <= 0) {
+            return Optional.empty();
+        }
+        int threshold = Math.max(0, Math.min(100, slot.getFaultErrorRate()));
+        if (ThreadLocalRandom.current().nextInt(100) >= threshold) {
+            return Optional.empty();
+        }
+        int status = slot.getFaultStatusCode() < 400 || slot.getFaultStatusCode() > 599 ? 500 : slot.getFaultStatusCode();
+        ResponseEntity<Object> response = ResponseEntity.status(status).body(Map.of(
+                "error", "Fault profile injected",
+                "profile", slot.getActiveProfileName()
+        ));
+        return Optional.of(outcome(response, ResponseSource.FALLBACK, slot, List.of(), "Fault profile injected"));
+    }
+
+    private void applyProfileLatency(RuntimeSlot slot) {
+        int min = Math.max(0, Math.min(MAX_REQUEST_DELAY_MS, slot.getLatencyMinMs()));
+        int max = Math.max(min, Math.min(MAX_REQUEST_DELAY_MS, slot.getLatencyMaxMs()));
+        if (max <= 0) {
+            return;
+        }
+        delay(min == max ? min : ThreadLocalRandom.current().nextInt(min, max + 1));
+    }
+
+    private ResponseOutcome outcome(
+            ResponseEntity<Object> response,
+            ResponseSource responseSource,
+            RuntimeSlot slot,
+            List<String> appliedRuleIds,
+            String error
+    ) {
+        return new ResponseOutcome(
+                response,
+                responseSource == null ? ResponseSource.FALLBACK : responseSource,
+                slot == null ? null : slot.getActiveProfileName(),
+                appliedRuleIds == null ? List.of() : appliedRuleIds,
+                error
+        );
     }
 
     private Optional<Integer> parseInt(String value) {
@@ -547,7 +678,20 @@ public class MockRuntimeController {
             Optional<Long> delayMs,
             Optional<String> exampleName,
             boolean debug,
-            Optional<String> acceptHeader
+            Optional<String> acceptHeader,
+            Optional<String> seed
+    ) {
+    }
+
+    private record BodySelection(Object body, ResponseSource source) {
+    }
+
+    private record ResponseOutcome(
+            ResponseEntity<Object> response,
+            ResponseSource responseSource,
+            String profileName,
+            List<String> appliedRuleIds,
+            String error
     ) {
     }
 }

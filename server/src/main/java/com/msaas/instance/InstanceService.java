@@ -185,18 +185,167 @@ public class InstanceService {
 
     public MockInstance updateSettings(String instanceId, String actorId, InstanceSettings settings) {
         MockInstance instance = requireWritableInstance(instanceId, actorId);
-        instance.setRateLimitEnabled(settings.rateLimitEnabled());
-        instance.setRateLimitRequests(settings.rateLimitRequests());
-        instance.setRateLimitWindowSeconds(settings.rateLimitWindowSeconds());
+        if (settings.rateLimitEnabled() != null) {
+            instance.setRateLimitEnabled(settings.rateLimitEnabled());
+        }
+        if (settings.rateLimitRequests() != null) {
+            instance.setRateLimitRequests(settings.rateLimitRequests());
+        }
+        if (settings.rateLimitWindowSeconds() != null) {
+            instance.setRateLimitWindowSeconds(settings.rateLimitWindowSeconds());
+        }
+        if (settings.smartResponsesEnabled() != null) {
+            instance.setSmartResponsesEnabled(settings.smartResponsesEnabled());
+        }
+        instance.setSmartSeedMode(settings.smartSeedMode());
+        if (settings.activeProfile() != null && !settings.activeProfile().isBlank()) {
+            MockProfile profile = requireProfile(instance, settings.activeProfile());
+            instance.activateProfileSettings(profile);
+        }
+        if (settings.faultProfileEnabled() != null) {
+            instance.setFaultProfileEnabled(settings.faultProfileEnabled());
+        }
+        if (settings.faultErrorRate() != null) {
+            instance.setFaultErrorRate(settings.faultErrorRate());
+        }
+        if (settings.faultStatusCode() != null) {
+            instance.setFaultStatusCode(settings.faultStatusCode());
+        }
+        if (settings.latencyMinMs() != null) {
+            instance.setLatencyMinMs(settings.latencyMinMs());
+        }
+        if (settings.latencyMaxMs() != null) {
+            instance.setLatencyMaxMs(settings.latencyMaxMs());
+        }
+        syncActiveProfileSettings(instance);
         instance.setUpdatedAt(Instant.now());
         MockInstance saved = instanceRepository.save(instance);
         registerLocal(saved);
-        auditService.record(instance.getProjectId(), actorId, "INSTANCE_SETTINGS_UPDATED", "mockInstance", instance.getId(), "Mock instance settings updated", Map.of(
-                "rateLimitEnabled", saved.isRateLimitEnabled(),
-                "rateLimitRequests", saved.getRateLimitRequests(),
-                "rateLimitWindowSeconds", saved.getRateLimitWindowSeconds()
+        auditService.record(instance.getProjectId(), actorId, "INSTANCE_SETTINGS_UPDATED", "mockInstance", instance.getId(), "Mock instance settings updated", Map.ofEntries(
+                Map.entry("rateLimitEnabled", saved.isRateLimitEnabled()),
+                Map.entry("rateLimitRequests", saved.getRateLimitRequests()),
+                Map.entry("rateLimitWindowSeconds", saved.getRateLimitWindowSeconds()),
+                Map.entry("smartResponsesEnabled", saved.isSmartResponsesEnabled()),
+                Map.entry("smartSeedMode", saved.getSmartSeedMode()),
+                Map.entry("activeProfile", saved.getActiveProfile()),
+                Map.entry("faultProfileEnabled", saved.isFaultProfileEnabled()),
+                Map.entry("faultErrorRate", saved.getFaultErrorRate()),
+                Map.entry("faultStatusCode", saved.getFaultStatusCode()),
+                Map.entry("latencyMinMs", saved.getLatencyMinMs()),
+                Map.entry("latencyMaxMs", saved.getLatencyMaxMs())
         ));
         return saved;
+    }
+
+    public List<MockProfile> listProfiles(String instanceId, String actorId) {
+        MockInstance instance = requireAccessibleInstance(instanceId, actorId);
+        ensureProfiles(instance);
+        return instance.getProfiles();
+    }
+
+    public MockProfile createProfile(String instanceId, String actorId, ProfileRequest request) {
+        MockInstance instance = requireWritableInstance(instanceId, actorId);
+        ensureProfiles(instance);
+        MockProfile profile = profileFromRequest(new MockProfile(), request);
+        profile.setId(UUID.randomUUID().toString());
+        profile.setCreatedAt(Instant.now());
+        profile.setUpdatedAt(profile.getCreatedAt());
+        List<MockProfile> profiles = new ArrayList<>(instance.getProfiles());
+        profiles.add(profile);
+        instance.setProfiles(profiles);
+        saveProfiles(instance, actorId, "PROFILE_CREATED", "Runtime profile created");
+        return profile;
+    }
+
+    public MockProfile updateProfile(String instanceId, String profileId, String actorId, ProfileRequest request) {
+        MockInstance instance = requireWritableInstance(instanceId, actorId);
+        ensureProfiles(instance);
+        List<MockProfile> profiles = new ArrayList<>(instance.getProfiles());
+        MockProfile profile = profiles.stream()
+                .filter(item -> item.getId().equals(profileId))
+                .findFirst()
+                .orElseThrow(() -> ApiException.notFound("Runtime profile not found"));
+        profileFromRequest(profile, request);
+        profile.setUpdatedAt(Instant.now());
+        instance.setProfiles(profiles);
+        if (instance.getActiveProfile().equals(profile.getId())) {
+            instance.activateProfileSettings(profile);
+        }
+        saveProfiles(instance, actorId, "PROFILE_UPDATED", "Runtime profile updated");
+        return profile;
+    }
+
+    public void deleteProfile(String instanceId, String profileId, String actorId) {
+        MockInstance instance = requireWritableInstance(instanceId, actorId);
+        ensureProfiles(instance);
+        List<MockProfile> profiles = new ArrayList<>(instance.getProfiles());
+        boolean removed = profiles.removeIf(item -> item.getId().equals(profileId));
+        if (!removed) {
+            throw ApiException.notFound("Runtime profile not found");
+        }
+        instance.setProfiles(profiles);
+        if (instance.getActiveProfile().equals(profileId)) {
+            instance.setActiveProfile(profiles.isEmpty() ? "custom" : profiles.getFirst().getId());
+            instance.activateProfileSettings(instance.activeProfile());
+        }
+        saveProfiles(instance, actorId, "PROFILE_DELETED", "Runtime profile deleted");
+    }
+
+    public MockInstance activateProfile(String instanceId, String profileId, String actorId) {
+        MockInstance instance = requireWritableInstance(instanceId, actorId);
+        ensureProfiles(instance);
+        MockProfile profile = requireProfile(instance, profileId);
+        instance.activateProfileSettings(profile);
+        instance.setUpdatedAt(Instant.now());
+        MockInstance saved = instanceRepository.save(instance);
+        registerLocal(saved);
+        auditService.record(instance.getProjectId(), actorId, "PROFILE_ACTIVATED", "mockInstance", instance.getId(), "Runtime profile activated", Map.of(
+                "profileId", profile.getId(),
+                "profileName", profile.getName()
+        ));
+        return saved;
+    }
+
+    public List<ResponseRule> listResponseRules(String instanceId, String actorId) {
+        MockInstance instance = requireAccessibleInstance(instanceId, actorId);
+        return orderedResponseRules(instance);
+    }
+
+    public ResponseRule createResponseRule(String instanceId, String actorId, ResponseRuleRequest request) {
+        MockInstance instance = requireWritableInstance(instanceId, actorId);
+        ResponseRule rule = responseRuleFromRequest(new ResponseRule(), request);
+        ensureRuleTargetsExistingRoute(instance, rule);
+        rule.setId(UUID.randomUUID().toString());
+        rule.setCreatedAt(Instant.now());
+        rule.setUpdatedAt(rule.getCreatedAt());
+        List<ResponseRule> rules = new ArrayList<>(instance.getResponseRules());
+        rules.add(rule);
+        saveResponseRules(instance, actorId, rules, "RESPONSE_RULE_CREATED", "Response rule created");
+        return rule;
+    }
+
+    public ResponseRule updateResponseRule(String instanceId, String ruleId, String actorId, ResponseRuleRequest request) {
+        MockInstance instance = requireWritableInstance(instanceId, actorId);
+        List<ResponseRule> rules = new ArrayList<>(instance.getResponseRules());
+        ResponseRule rule = rules.stream()
+                .filter(item -> item.getId().equals(ruleId))
+                .findFirst()
+                .orElseThrow(() -> ApiException.notFound("Response rule not found"));
+        responseRuleFromRequest(rule, request);
+        ensureRuleTargetsExistingRoute(instance, rule);
+        rule.setUpdatedAt(Instant.now());
+        saveResponseRules(instance, actorId, rules, "RESPONSE_RULE_UPDATED", "Response rule updated");
+        return rule;
+    }
+
+    public void deleteResponseRule(String instanceId, String ruleId, String actorId) {
+        MockInstance instance = requireWritableInstance(instanceId, actorId);
+        List<ResponseRule> rules = new ArrayList<>(instance.getResponseRules());
+        boolean removed = rules.removeIf(item -> item.getId().equals(ruleId));
+        if (!removed) {
+            throw ApiException.notFound("Response rule not found");
+        }
+        saveResponseRules(instance, actorId, rules, "RESPONSE_RULE_DELETED", "Response rule deleted");
     }
 
     public List<MockScenario> listScenarios(String instanceId, String actorId) {
@@ -245,6 +394,12 @@ public class InstanceService {
                 .toList();
     }
 
+    private List<ResponseRule> orderedResponseRules(MockInstance instance) {
+        return instance.getResponseRules().stream()
+                .sorted(Comparator.comparingInt(ResponseRule::getPriority).reversed())
+                .toList();
+    }
+
     private MockScenario scenarioFromRequest(MockScenario scenario, ScenarioRequest request) {
         scenario.setName(request.name());
         scenario.setEnabled(request.enabled());
@@ -266,6 +421,96 @@ public class InstanceService {
         MockInstance saved = instanceRepository.save(instance);
         registerLocal(saved);
         auditService.record(saved.getProjectId(), actorId, action, "mockScenario", saved.getId(), message);
+    }
+
+    private ResponseRule responseRuleFromRequest(ResponseRule rule, ResponseRuleRequest request) {
+        rule.setName(request.name());
+        rule.setEnabled(request.enabled());
+        rule.setPriority(request.priority());
+        rule.setOperationId(request.operationId());
+        rule.setMethod(request.method());
+        rule.setPathTemplate(request.pathTemplate());
+        rule.setFieldPath(request.fieldPath());
+        rule.setType(request.type());
+        rule.setFixedValue(request.fixedValue());
+        rule.setMinValue(request.minValue());
+        rule.setMaxValue(request.maxValue());
+        rule.setEnumValues(request.enumValues());
+        rule.setTemplate(request.template());
+        return rule;
+    }
+
+    private void saveResponseRules(MockInstance instance, String actorId, List<ResponseRule> rules, String action, String message) {
+        instance.setResponseRules(rules);
+        instance.setUpdatedAt(Instant.now());
+        MockInstance saved = instanceRepository.save(instance);
+        registerLocal(saved);
+        auditService.record(saved.getProjectId(), actorId, action, "responseRule", saved.getId(), message);
+    }
+
+    private void ensureRuleTargetsExistingRoute(MockInstance instance, ResponseRule rule) {
+        if (rule.getFieldPath() == null || rule.getFieldPath().isBlank()) {
+            throw ApiException.badRequest("Response rule field path is required");
+        }
+        if (instance.getContract() == null || instance.getContract().getRoutes() == null) {
+            throw ApiException.badRequest("Instance contract is not loaded");
+        }
+        boolean exists = instance.getContract().getRoutes().stream().anyMatch(route -> {
+            if (rule.getOperationId() != null && !rule.getOperationId().isBlank() && route.getOperationId() != null) {
+                return rule.getOperationId().equals(route.getOperationId());
+            }
+            return rule.getMethod() != null
+                    && rule.getPathTemplate() != null
+                    && rule.getMethod().equalsIgnoreCase(route.getMethod())
+                    && rule.getPathTemplate().equals(route.getPathTemplate());
+        });
+        if (!exists) {
+            throw ApiException.badRequest("Response rule must target an existing OpenAPI operation");
+        }
+    }
+
+    private void ensureProfiles(MockInstance instance) {
+        if (instance.getProfiles().isEmpty()) {
+            instance.setProfiles(MockInstance.defaultProfiles());
+        }
+    }
+
+    private MockProfile requireProfile(MockInstance instance, String profileId) {
+        return instance.getProfiles().stream()
+                .filter(profile -> profile.getId().equals(profileId) || profile.getName().equalsIgnoreCase(profileId))
+                .findFirst()
+                .orElseThrow(() -> ApiException.notFound("Runtime profile not found"));
+    }
+
+    private MockProfile profileFromRequest(MockProfile profile, ProfileRequest request) {
+        profile.setName(request.name());
+        profile.setFaultProfileEnabled(request.faultProfileEnabled());
+        profile.setFaultErrorRate(request.faultErrorRate());
+        profile.setFaultStatusCode(request.faultStatusCode());
+        profile.setLatencyMinMs(request.latencyMinMs());
+        profile.setLatencyMaxMs(request.latencyMaxMs());
+        return profile;
+    }
+
+    private void syncActiveProfileSettings(MockInstance instance) {
+        for (MockProfile profile : instance.getProfiles()) {
+            if (instance.getActiveProfile().equals(profile.getId())) {
+                profile.setFaultProfileEnabled(instance.isFaultProfileEnabled());
+                profile.setFaultErrorRate(instance.getFaultErrorRate());
+                profile.setFaultStatusCode(instance.getFaultStatusCode());
+                profile.setLatencyMinMs(instance.getLatencyMinMs());
+                profile.setLatencyMaxMs(instance.getLatencyMaxMs());
+                profile.setUpdatedAt(Instant.now());
+                return;
+            }
+        }
+    }
+
+    private void saveProfiles(MockInstance instance, String actorId, String action, String message) {
+        instance.setUpdatedAt(Instant.now());
+        MockInstance saved = instanceRepository.save(instance);
+        registerLocal(saved);
+        auditService.record(saved.getProjectId(), actorId, action, "runtimeProfile", saved.getId(), message);
     }
 
     private IssuedSecret uniquePublicToken() {
@@ -298,7 +543,29 @@ public class InstanceService {
     private record IssuedSecret(String raw, String hash, String preview) {
     }
 
-    public record InstanceSettings(boolean rateLimitEnabled, int rateLimitRequests, int rateLimitWindowSeconds) {
+    public record InstanceSettings(
+            Boolean rateLimitEnabled,
+            Integer rateLimitRequests,
+            Integer rateLimitWindowSeconds,
+            Boolean smartResponsesEnabled,
+            String smartSeedMode,
+            Boolean faultProfileEnabled,
+            Integer faultErrorRate,
+            Integer faultStatusCode,
+            Integer latencyMinMs,
+            Integer latencyMaxMs,
+            String activeProfile
+    ) {
+    }
+
+    public record ProfileRequest(
+            String name,
+            boolean faultProfileEnabled,
+            int faultErrorRate,
+            int faultStatusCode,
+            int latencyMinMs,
+            int latencyMaxMs
+    ) {
     }
 
     public record ScenarioRequest(
@@ -313,6 +580,23 @@ public class InstanceService {
             Object body,
             Map<String, String> headers,
             long delayMs
+    ) {
+    }
+
+    public record ResponseRuleRequest(
+            String name,
+            boolean enabled,
+            int priority,
+            String operationId,
+            String method,
+            String pathTemplate,
+            String fieldPath,
+            String type,
+            Object fixedValue,
+            Integer minValue,
+            Integer maxValue,
+            List<Object> enumValues,
+            String template
     ) {
     }
 }

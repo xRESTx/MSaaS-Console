@@ -23,9 +23,11 @@ import java.util.List;
 @RequestMapping("/api")
 public class SpecController {
     private final SpecService specService;
+    private final SpecResponsePreviewService previewService;
 
-    public SpecController(SpecService specService) {
+    public SpecController(SpecService specService, SpecResponsePreviewService previewService) {
         this.specService = specService;
+        this.previewService = previewService;
     }
 
     @PostMapping("/projects/{projectId}/spec-versions")
@@ -49,6 +51,17 @@ public class SpecController {
             return List.of();
         }
         return version.getNormalizedContract().getRoutes().stream().map(RouteView::from).toList();
+    }
+
+    @PostMapping("/spec-versions/{versionId}/response-preview")
+    public ResponsePreviewView responsePreview(
+            @AuthenticationPrincipal AuthenticatedUser user,
+            @PathVariable String versionId,
+            @RequestBody ResponsePreviewRequest request
+    ) {
+        SpecVersion version = specService.requireAccessibleVersion(versionId, user.id());
+        SpecResponsePreviewService.Preview preview = previewService.preview(version, request.toServiceRequest());
+        return ResponsePreviewView.from(preview);
     }
 
     public record CreateSpecVersionRequest(
@@ -106,10 +119,31 @@ public class SpecController {
         }
     }
 
-    public record ResponseView(int statusCode, String contentType, List<String> examples) {
+    public record ResponseView(int statusCode, String contentType, List<String> contentTypes, List<String> examples, boolean schemaAvailable) {
         static ResponseView from(MockResponseDefinition definition) {
             Map<String, Object> examples = definition.getExamples();
-            return new ResponseView(definition.getStatusCode(), definition.getContentType(), List.copyOf(examples.keySet()));
+            boolean schemaAvailable = definition.getContents().values().stream().anyMatch(content -> content.getSchema() != null);
+            return new ResponseView(definition.getStatusCode(), definition.getContentType(), List.copyOf(definition.getContents().keySet()), List.copyOf(examples.keySet()), schemaAvailable);
+        }
+    }
+
+    public record ResponsePreviewRequest(
+            String operationId,
+            String method,
+            String pathTemplate,
+            Integer statusCode,
+            String contentType,
+            String exampleName,
+            String seed
+    ) {
+        SpecResponsePreviewService.PreviewRequest toServiceRequest() {
+            return new SpecResponsePreviewService.PreviewRequest(operationId, method, pathTemplate, statusCode, contentType, exampleName, seed);
+        }
+    }
+
+    public record ResponsePreviewView(int statusCode, String contentType, Object body, boolean generated, String seed) {
+        static ResponsePreviewView from(SpecResponsePreviewService.Preview preview) {
+            return new ResponsePreviewView(preview.statusCode(), preview.contentType(), preview.body(), preview.generated(), preview.seed());
         }
     }
 }

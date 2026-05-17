@@ -68,10 +68,33 @@ class AccessAndRuntimeIT {
         HttpResponse<String> forbiddenInstance = request(HttpMethod.GET, "/api/instances/" + instance.get("id"), otherToken, null);
         assertThat(forbiddenInstance.statusCode()).isEqualTo(404);
 
+        HttpResponse<String> generatedResponse = getWithIp(publicUrl + "/orders/order-1?__seed=stable", "10.10.0.1");
+        assertThat(generatedResponse.statusCode()).isEqualTo(200);
+        assertThat(generatedResponse.body()).contains("paid");
+
+        requestMap(HttpMethod.POST, "/api/instances/" + instance.get("id") + "/response-rules", ownerToken, Map.of(
+                "name", "Force paid",
+                "enabled", true,
+                "priority", 100,
+                "method", "GET",
+                "pathTemplate", "/orders/{id}",
+                "fieldPath", "paid",
+                "type", "FIXED",
+                "fixedValue", true
+        ));
+        HttpResponse<String> forbiddenRules = request(HttpMethod.GET, "/api/instances/" + instance.get("id") + "/response-rules", otherToken, null);
+        assertThat(forbiddenRules.statusCode()).isEqualTo(404);
+
+        HttpResponse<String> ruledResponse = getWithIp(publicUrl + "/orders/order-2?__seed=stable", "10.10.0.1");
+        assertThat(ruledResponse.statusCode()).isEqualTo(200);
+        assertThat(ruledResponse.body()).contains("\"paid\":true");
+
         requestMap(HttpMethod.PATCH, "/api/instances/" + instance.get("id") + "/settings", ownerToken, Map.of(
                 "rateLimitEnabled", true,
                 "rateLimitRequests", 2,
-                "rateLimitWindowSeconds", 60
+                "rateLimitWindowSeconds", 60,
+                "smartResponsesEnabled", true,
+                "smartSeedMode", "STABLE"
         ));
 
         requestMap(HttpMethod.POST, "/api/instances/" + instance.get("id") + "/scenarios", ownerToken, Map.of(
@@ -100,6 +123,29 @@ class AccessAndRuntimeIT {
         List<Map<String, Object>> logs = requestList(HttpMethod.GET, "/api/instances/" + instance.get("id") + "/logs", ownerToken, null);
         assertThat(logs).isNotEmpty();
         assertThat(logs.stream().map(log -> String.valueOf(log.get("error")))).contains("Rate limit exceeded");
+        assertThat(logs.stream().map(log -> String.valueOf(log.get("responseSource")))).contains("SCENARIO", "RESPONSE_RULE");
+
+        List<Map<String, Object>> profiles = requestList(HttpMethod.GET, "/api/instances/" + instance.get("id") + "/profiles", ownerToken, null);
+        assertThat(profiles.stream().map(profile -> String.valueOf(profile.get("name")))).contains("dev", "qa", "demo");
+
+        Map<String, Object> faultProfile = requestMap(HttpMethod.POST, "/api/instances/" + instance.get("id") + "/profiles", ownerToken, Map.of(
+                "name", "it-fault",
+                "faultProfileEnabled", true,
+                "faultErrorRate", 100,
+                "faultStatusCode", 503,
+                "latencyMinMs", 0,
+                "latencyMaxMs", 0
+        ));
+        Map<String, Object> profiledInstance = requestMap(HttpMethod.POST, "/api/instances/" + instance.get("id") + "/profiles/" + faultProfile.get("id") + "/activate", ownerToken, null);
+        assertThat(profiledInstance.get("activeProfileName")).isEqualTo("it-fault");
+
+        HttpResponse<String> faulted = getWithIp(publicUrl + "/orders?name=fault", "10.10.0.99");
+        assertThat(faulted.statusCode()).isEqualTo(503);
+        List<Map<String, Object>> profileLogs = requestList(HttpMethod.GET, "/api/instances/" + instance.get("id") + "/logs", ownerToken, null);
+        assertThat(profileLogs).anySatisfy(log -> {
+            assertThat(log.get("profileName")).isEqualTo("it-fault");
+            assertThat(log.get("error")).isEqualTo("Fault profile injected");
+        });
     }
 
     private String register(String email) throws Exception {
@@ -140,6 +186,11 @@ class AccessAndRuntimeIT {
         return client.send(request, HttpResponse.BodyHandlers.ofString());
     }
 
+    private HttpResponse<String> getWithIp(String url, String ip) throws Exception {
+        HttpRequest request = HttpRequest.newBuilder(URI.create(url)).header("X-Forwarded-For", ip).GET().build();
+        return client.send(request, HttpResponse.BodyHandlers.ofString());
+    }
+
     private String sampleSpec() {
         return """
                 openapi: 3.0.3
@@ -163,6 +214,23 @@ class AccessAndRuntimeIT {
                                       type: string
                                     paid:
                                       type: boolean
+                  /orders/{id}:
+                    get:
+                      operationId: getOrder
+                      responses:
+                        "200":
+                          description: OK
+                          content:
+                            application/json:
+                              schema:
+                                type: object
+                                required: [id, paid]
+                                properties:
+                                  id:
+                                    type: string
+                                    format: uuid
+                                  paid:
+                                    type: boolean
                 """;
     }
 }

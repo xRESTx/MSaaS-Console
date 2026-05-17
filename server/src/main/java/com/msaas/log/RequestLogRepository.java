@@ -18,6 +18,10 @@ public interface RequestLogRepository extends MongoRepository<RequestLog, String
 
     long countByMatchedFalse();
 
+    long countByError(String error);
+
+    long countByResponseSource(String responseSource);
+
     void deleteByInstanceId(String instanceId);
 
     void deleteByProjectId(String projectId);

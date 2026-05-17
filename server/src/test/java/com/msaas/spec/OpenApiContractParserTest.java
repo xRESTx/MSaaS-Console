@@ -2,8 +2,6 @@ package com.msaas.spec;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.Map;
-
 import static org.assertj.core.api.Assertions.assertThat;
 
 class OpenApiContractParserTest {
@@ -39,7 +37,12 @@ class OpenApiContractParserTest {
         assertThat(parsed.valid()).isTrue();
         assertThat(parsed.contract().getRoutes()).hasSize(1);
         assertThat(parsed.contract().getRoutes().getFirst().getPathTemplate()).isEqualTo("/orders/{id}");
-        assertThat(parsed.contract().getRoutes().getFirst().defaultResponse().getBody()).isInstanceOf(Map.class);
+        assertThat(parsed.contract().getRoutes().getFirst().defaultResponse().getBody()).isNull();
+        assertThat(parsed.contract().getRoutes().getFirst().defaultResponse().getContents().get("application/json").getSchema())
+                .satisfies(schema -> {
+                    assertThat(schema.getType()).isEqualTo("object");
+                    assertThat(schema.getProperties()).containsKeys("id", "paid");
+                });
     }
 
     @Test
