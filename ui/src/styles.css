@@ -583,6 +583,335 @@ pre {
   box-shadow: var(--shadow);
 }
 
+.landing-topbar {
+  width: 100%;
+  min-height: 76px;
+  padding: 0 max(22px, calc((100vw - 1180px) / 2));
+  color: white;
+  border-bottom: 1px solid rgb(255 255 255 / 10%);
+  background: #0d1624;
+}
+
+.landing-topbar .brand small,
+.landing-topbar .landing-nav a {
+  color: rgb(255 255 255 / 68%);
+}
+
+.landing-topbar .brand strong,
+.landing-topbar .landing-nav a:hover {
+  color: white;
+}
+
+.landing-topbar .soft-button,
+.landing-topbar .segmented-button,
+.landing-topbar .icon-button {
+  color: white;
+  border-color: rgb(255 255 255 / 14%);
+  background: rgb(255 255 255 / 5%);
+}
+
+.landing-topbar .soft-button:hover,
+.landing-topbar .segmented-button:hover,
+.landing-topbar .icon-button:hover {
+  background: rgb(255 255 255 / 10%);
+}
+
+.landing-hero {
+  display: block;
+  min-height: clamp(660px, 82vh, 840px);
+  border-top: 0;
+  color: white;
+  background: #0d1624;
+}
+
+.landing-hero::before {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background:
+    linear-gradient(110deg, rgb(13 22 36 / 100%) 0%, rgb(13 22 36 / 98%) 42%, rgb(13 22 36 / 72%) 64%, rgb(13 22 36 / 94%) 100%),
+    repeating-linear-gradient(90deg, rgb(255 255 255 / 4%) 0 1px, transparent 1px 76px);
+  content: "";
+}
+
+.landing-copy {
+  z-index: 2;
+  width: min(560px, 100%);
+  padding-top: 14px;
+}
+
+.landing-copy .eyebrow {
+  width: fit-content;
+  border: 1px solid rgb(94 234 212 / 28%);
+  border-radius: 999px;
+  padding: 8px 12px;
+  background: rgb(20 184 166 / 10%);
+  color: #99f6e4;
+}
+
+.landing-copy h1 {
+  max-width: 590px;
+  color: white;
+  font-size: clamp(36px, 4vw, 56px);
+}
+
+.landing-copy p:not(.eyebrow) {
+  color: rgb(226 232 240 / 82%);
+}
+
+.landing-hero-actions .soft-button {
+  color: white;
+  border-color: rgb(255 255 255 / 15%);
+  background: rgb(255 255 255 / 5%);
+}
+
+.landing-hero-actions .soft-button:hover {
+  background: rgb(255 255 255 / 10%);
+}
+
+.hero-proof-row {
+  color: rgb(226 232 240 / 76%);
+}
+
+.landing-audience-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  max-width: 620px;
+}
+
+.landing-audience-row span {
+  border: 1px solid rgb(255 255 255 / 12%);
+  border-radius: 999px;
+  padding: 8px 11px;
+  background: rgb(255 255 255 / 6%);
+  color: rgb(255 255 255 / 92%);
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.hero-product-scene {
+  display: none;
+}
+
+.landing-dashboard-card {
+  position: absolute;
+  top: 84px;
+  right: max(22px, calc((100vw - 1180px) / 2));
+  z-index: 1;
+  width: min(520px, 42vw);
+  border: 1px solid rgb(255 255 255 / 12%);
+  border-radius: 16px;
+  padding: 16px;
+  background: rgb(255 255 255 / 8%);
+  box-shadow: 0 28px 80px rgb(0 0 0 / 34%);
+  backdrop-filter: blur(10px);
+}
+
+.landing-dashboard-inner {
+  display: grid;
+  gap: 14px;
+  border-radius: 12px;
+  padding: 16px;
+  background: #0a111d;
+}
+
+.dashboard-head,
+.dashboard-log-head,
+.dashboard-log-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.dashboard-head {
+  border-bottom: 1px solid rgb(255 255 255 / 10%);
+  padding-bottom: 14px;
+}
+
+.dashboard-head span,
+.dashboard-url,
+.dashboard-log {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+}
+
+.dashboard-head small,
+.dashboard-url small,
+.dashboard-log-head small,
+.dashboard-stats small,
+.diagnostics-field small {
+  color: rgb(226 232 240 / 64%);
+  font-size: 12px;
+}
+
+.dashboard-head strong,
+.dashboard-log-head strong {
+  color: white;
+}
+
+.dashboard-url,
+.dashboard-stats > div,
+.dashboard-log {
+  border: 1px solid rgb(255 255 255 / 10%);
+  border-radius: 10px;
+  padding: 12px;
+  background: rgb(2 6 23 / 72%);
+}
+
+.dashboard-url code {
+  overflow-wrap: anywhere;
+  color: #93c5fd;
+  font-size: 13px;
+}
+
+.dashboard-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.dashboard-stats strong {
+  display: block;
+  color: white;
+  font-size: 22px;
+}
+
+.dashboard-log-row {
+  min-height: 34px;
+  border-radius: 8px;
+  padding: 7px 10px;
+  background: rgb(15 23 42 / 86%);
+}
+
+.dashboard-log-row code {
+  overflow: hidden;
+  color: #86efac;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dashboard-log-row.error code {
+  color: #fda4af;
+}
+
+.dashboard-log-row span {
+  color: rgb(226 232 240 / 78%);
+}
+
+.landing-metrics {
+  position: relative;
+  z-index: 4;
+  margin-top: -56px;
+  padding-top: 0;
+}
+
+.landing-metric,
+.landing-card,
+.landing-step {
+  border-radius: 12px;
+}
+
+.landing-card,
+.landing-step {
+  min-height: 230px;
+  padding: 22px;
+}
+
+.landing-workflow {
+  grid-template-columns: minmax(0, 0.95fr) minmax(360px, 1fr);
+  align-items: center;
+}
+
+.landing-workflow .landing-step-grid {
+  grid-template-columns: 1fr;
+}
+
+.landing-workflow .landing-step {
+  min-height: auto;
+  background: color-mix(in srgb, var(--surface) 82%, white);
+}
+
+.landing-diagnostics {
+  grid-template-columns: minmax(320px, 0.9fr) minmax(0, 1fr);
+  align-items: center;
+}
+
+.diagnostics-preview {
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 16px;
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  box-shadow: var(--shadow);
+}
+
+.diagnostics-preview-inner {
+  display: grid;
+  gap: 16px;
+  border-radius: 12px;
+  padding: 18px;
+  background: #0a111d;
+  color: white;
+}
+
+.diagnostics-preview-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.diagnostics-preview-head span {
+  border-radius: 999px;
+  padding: 5px 10px;
+  background: rgb(245 158 11 / 15%);
+  color: #fcd34d;
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.diagnostics-field {
+  display: grid;
+  gap: 5px;
+}
+
+.diagnostics-field code {
+  color: #93c5fd;
+}
+
+.diagnostics-field p {
+  margin: 0;
+  color: rgb(226 232 240 / 84%);
+}
+
+.landing-diagnostics .primary-button {
+  width: fit-content;
+  margin-top: 8px;
+}
+
+.landing-final {
+  border: 0;
+  border-radius: 18px;
+  padding: clamp(28px, 5vw, 56px);
+  color: white;
+  background: #0f8f85;
+}
+
+.landing-final h2,
+.landing-final p,
+.landing-final .eyebrow {
+  color: white;
+}
+
+.landing-final .soft-button {
+  color: white;
+  border-color: rgb(255 255 255 / 18%);
+  background: rgb(255 255 255 / 10%);
+}
+
 .auth-copy {
   display: grid;
   gap: 24px;
@@ -1889,20 +2218,25 @@ button:disabled {
 }
 
 .drawer {
-  position: fixed;
-  top: 18px;
-  right: 18px;
-  z-index: 25;
+  position: relative;
   display: grid;
   gap: 14px;
-  width: min(520px, calc(100vw - 36px));
-  max-height: calc(100vh - 36px);
+  width: min(680px, calc(100vw - 32px));
+  max-height: min(760px, calc(100vh - 40px));
   overflow: auto;
   border: 1px solid var(--line);
   border-radius: 8px;
-  padding: 16px;
+  padding: 18px;
   background: var(--surface);
   box-shadow: var(--shadow);
+}
+
+.log-modal-backdrop {
+  z-index: 35;
+}
+
+.log-detail-dialog pre {
+  max-height: 340px;
 }
 
 .drawer-heading {
@@ -2318,5 +2652,74 @@ button:disabled {
 
   .instance-card code {
     grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 1180px) {
+  .landing-hero {
+    min-height: auto;
+  }
+
+  .landing-dashboard-card {
+    position: relative;
+    top: auto;
+    right: auto;
+    width: min(720px, 100%);
+    margin-top: 30px;
+  }
+
+  .hero-product-scene {
+    display: none;
+  }
+
+  .landing-workflow,
+  .landing-diagnostics {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 820px) {
+  .landing-shell {
+    padding: 0;
+  }
+
+  .landing-topbar {
+    width: 100%;
+    padding: 10px 12px;
+  }
+
+  .landing-hero {
+    padding: 42px 12px 56px;
+  }
+
+  .landing-copy h1 {
+    font-size: clamp(34px, 10vw, 54px);
+  }
+
+  .landing-dashboard-card {
+    padding: 10px;
+  }
+
+  .dashboard-stats {
+    grid-template-columns: 1fr;
+  }
+
+  .landing-metrics {
+    margin-top: 0;
+  }
+
+  .landing-workflow .landing-step-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .landing-diagnostics {
+    grid-template-columns: 1fr;
+  }
+
+  .landing-diagnostics .primary-button,
+  .landing-final .landing-hero-actions,
+  .landing-final .primary-button,
+  .landing-final .soft-button {
+    width: 100%;
   }
 }
