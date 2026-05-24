@@ -46,6 +46,14 @@ public class RuntimePlaneController {
         return runtimePlaneService.slots();
     }
 
+    @PostMapping("/rebalance")
+    public RuntimePlaneService.RebalanceResult rebalance(HttpServletRequest httpRequest) {
+        if (!runtimePlaneService.internalSecretMatches(httpRequest.getHeader("X-MSaaS-Internal-Secret"))) {
+            throw com.msaas.common.ApiException.forbidden("Invalid runtime rebalance secret");
+        }
+        return runtimePlaneService.rebalanceRunningInstances();
+    }
+
     public record RuntimeHeartbeatRequest(
             @NotBlank String workerKey,
             @NotBlank String baseUrl,

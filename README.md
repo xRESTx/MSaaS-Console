@@ -426,6 +426,49 @@ $env:LOAD_CONCURRENCY=48
 npm run test:load
 ```
 
+Runtime autoscaler for local Docker Compose:
+
+```powershell
+cd D:\MSaaS\ui
+npm run runtime:autoscaler
+```
+
+The autoscaler is a long-running local process. It reads `GET /api/runtime/workers`, checks slot pressure, and scales runtime workers up with:
+
+```powershell
+docker compose up -d --scale runtime=N
+```
+
+After a scale-up it also calls `POST /api/runtime/rebalance` with `X-MSaaS-Internal-Secret`. This redistributes running mock instances across live workers so the next mock requests warm slots on the new workers instead of leaving them empty.
+
+Useful settings:
+
+```powershell
+$env:AUTOSCALER_MIN_WORKERS=1
+$env:AUTOSCALER_MAX_WORKERS=6
+$env:AUTOSCALER_SCALE_STEP=2
+$env:AUTOSCALER_SLOT_RATIO_PERCENT=75
+$env:AUTOSCALER_MAX_SLOTS_PER_WORKER=250
+$env:AUTOSCALER_REBALANCE="true"
+npm run runtime:autoscaler
+```
+
+For a one-shot dry run:
+
+```powershell
+$env:AUTOSCALER_ONCE="true"
+$env:AUTOSCALER_DRY_RUN="true"
+npm run runtime:autoscaler
+```
+
+For a demo that generates pressure and checks scale-up behavior:
+
+```powershell
+npm run test:autoscale
+```
+
+This local autoscaler only scales up. Scale-down and live rebalance of existing instances are intentionally left out until runtime slot migration/reassignment is made conservative enough for production use.
+
 Backend unit tests:
 
 ```powershell

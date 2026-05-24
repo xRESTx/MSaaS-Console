@@ -121,7 +121,7 @@ public class MockRuntimeRegistry {
 
     synchronized void cleanup(Instant now) {
         long ttlSeconds = properties.getRuntime().getSlotIdleTtlSeconds();
-        slotsByTokenHash.entrySet().removeIf(entry -> canEvict(entry.getValue()) && entry.getValue().isIdleExpired(now, ttlSeconds));
+        slotsByTokenHash.entrySet().removeIf(entry -> canEvict(entry.getValue()) && (stale(entry.getValue()) || entry.getValue().isIdleExpired(now, ttlSeconds)));
         evictUntilWithinLimit();
     }
 

@@ -10,10 +10,15 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
+import java.util.ArrayDeque;
 import java.util.Comparator;
+import java.util.Deque;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 @Service
 public class RuntimePlaneService {
@@ -129,6 +134,67 @@ public class RuntimePlaneService {
         });
     }
 
+    public RebalanceResult rebalanceRunningInstances() {
+        if (properties.getRuntime().isEmbedded()) {
+            return new RebalanceResult(0, 0, 0, Map.of());
+        }
+        List<RuntimeWorker> liveWorkers = workers().stream()
+                .filter(this::live)
+                .filter(worker -> !LOCAL_WORKER_KEY.equals(worker.getWorkerKey()))
+                .sorted(Comparator.comparing(RuntimeWorker::getWorkerKey))
+                .toList();
+        if (liveWorkers.isEmpty()) {
+            return new RebalanceResult(0, 0, 0, Map.of());
+        }
+
+        List<MockInstance> instances = instanceRepository.findByStatus(InstanceStatus.RUNNING)
+                .stream()
+                .sorted(Comparator.comparing(MockInstance::getId, Comparator.nullsLast(String::compareTo)).reversed())
+                .toList();
+        Instant now = Instant.now();
+        int changed = 0;
+        Map<String, Integer> distribution = liveWorkers.stream()
+                .collect(Collectors.toMap(RuntimeWorker::getWorkerKey, RuntimeWorker::getSlotCount, (left, right) -> left, LinkedHashMap::new));
+        Map<String, Deque<MockInstance>> instancesByWorker = new HashMap<>();
+        liveWorkers.forEach(worker -> instancesByWorker.put(worker.getWorkerKey(), new ArrayDeque<>()));
+        for (MockInstance instance : instances) {
+            if (instancesByWorker.containsKey(instance.getWorkerKey())) {
+                instancesByWorker.get(instance.getWorkerKey()).add(instance);
+            }
+        }
+
+        while (true) {
+            String sourceWorkerKey = hottestWorker(distribution);
+            String targetWorkerKey = coldestWorker(distribution);
+            if (sourceWorkerKey == null || targetWorkerKey == null || sourceWorkerKey.equals(targetWorkerKey)) {
+                break;
+            }
+            int sourceSlots = distribution.getOrDefault(sourceWorkerKey, 0);
+            int targetSlots = distribution.getOrDefault(targetWorkerKey, 0);
+            if (sourceSlots - targetSlots <= 1) {
+                break;
+            }
+            Deque<MockInstance> sourceInstances = instancesByWorker.get(sourceWorkerKey);
+            if (sourceInstances == null || sourceInstances.isEmpty()) {
+                distribution.put(sourceWorkerKey, targetSlots);
+                continue;
+            }
+            MockInstance instance = sourceInstances.removeFirst();
+            if (!targetWorkerKey.equals(instance.getWorkerKey())) {
+                instance.setWorkerKey(targetWorkerKey);
+                instance.setAssignedAt(now);
+                instance.setUpdatedAt(now);
+                instanceRepository.save(instance);
+                instancesByWorker.computeIfAbsent(targetWorkerKey, ignored -> new ArrayDeque<>()).add(instance);
+                changed += 1;
+            }
+            distribution.put(sourceWorkerKey, sourceSlots - 1);
+            distribution.put(targetWorkerKey, targetSlots + 1);
+        }
+
+        return new RebalanceResult(liveWorkers.size(), instances.size(), changed, distribution);
+    }
+
     public boolean localExecutionEnabled() {
         return properties.getRuntime().isEmbedded() || properties.getRuntime().isRuntime();
     }
@@ -186,9 +252,42 @@ public class RuntimePlaneService {
 
     private String baseUrl() {
         String configured = properties.getRuntime().getBaseUrl();
-        if (configured != null && !configured.isBlank()) {
+        if (configured != null && !configured.isBlank() && (properties.getRuntime().isEmbedded() || !"local".equalsIgnoreCase(configured))) {
             return configured;
         }
-        return properties.getRuntime().isEmbedded() ? "local" : "http://localhost:8082";
+        if (properties.getRuntime().isEmbedded()) {
+            return "local";
+        }
+        String hostname = System.getenv("HOSTNAME");
+        String port = System.getenv("SERVER_PORT");
+        if (hostname == null || hostname.isBlank()) {
+            hostname = "localhost";
+        }
+        if (port == null || port.isBlank()) {
+            port = "8082";
+        }
+        return "http://" + hostname + ":" + port;
+    }
+
+    private String hottestWorker(Map<String, Integer> distribution) {
+        return distribution.entrySet().stream()
+                .max(Map.Entry.comparingByValue())
+                .map(Map.Entry::getKey)
+                .orElse(null);
+    }
+
+    private String coldestWorker(Map<String, Integer> distribution) {
+        return distribution.entrySet().stream()
+                .min(Map.Entry.comparingByValue())
+                .map(Map.Entry::getKey)
+                .orElse(null);
+    }
+
+    public record RebalanceResult(
+            int workerCount,
+            int instanceCount,
+            int reassignedCount,
+            Map<String, Integer> distribution
+    ) {
     }
 }

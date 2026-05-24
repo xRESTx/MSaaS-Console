@@ -51,7 +51,6 @@ services:
       APP_CORS_ALLOWED_ORIGINS: http://localhost:5173
       ADMIN_BOOTSTRAP_EMAIL: admin@example.com
       APP_RUNTIME_ROLE: RUNTIME
-      APP_RUNTIME_BASE_URL: http://runtime:8082
       APP_RUNTIME_INTERNAL_SECRET: local-runtime-secret
     expose:
       - "8082"

@@ -58,12 +58,18 @@ class MockRuntimeRegistryTest {
         AppProperties properties = runtimeProperties(RuntimeRole.RUNTIME, 2, 1800);
         MockRuntimeRegistry registry = new MockRuntimeRegistry(repository, secretHashService, properties);
         Instant now = Instant.now();
-        RuntimeSlot oldSlot = registry.register(instance("one", "token-one", InstanceMode.STATELESS));
-        RuntimeSlot recentSlot = registry.register(instance("two", "token-two", InstanceMode.STATELESS));
+        MockInstance one = instance("one", "token-one", InstanceMode.STATELESS);
+        MockInstance two = instance("two", "token-two", InstanceMode.STATELESS);
+        MockInstance three = instance("three", "token-three", InstanceMode.STATELESS);
+        when(repository.findById("one")).thenReturn(Optional.of(one));
+        when(repository.findById("two")).thenReturn(Optional.of(two));
+        when(repository.findById("three")).thenReturn(Optional.of(three));
+        RuntimeSlot oldSlot = registry.register(one);
+        RuntimeSlot recentSlot = registry.register(two);
         oldSlot.setLastAccessedAt(now.minusSeconds(20));
         recentSlot.setLastAccessedAt(now.minusSeconds(5));
 
-        registry.register(instance("three", "token-three", InstanceMode.STATELESS));
+        registry.register(three);
 
         assertThat(registry.slotCount()).isEqualTo(2);
         assertThat(registry.slots()).extracting(MockRuntimeRegistry.RuntimeSlotInfo::instanceId)

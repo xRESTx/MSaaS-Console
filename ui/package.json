@@ -8,7 +8,10 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "test:e2e": "node scripts/e2e-smoke.mjs",
-    "test:load": "node scripts/load-test.mjs"
+    "test:load": "node scripts/load-test.mjs",
+    "test:autoscale": "node scripts/runtime-autoscale-load.mjs",
+    "test:autoscaler-demo": "node scripts/runtime-autoscaler-demo.mjs",
+    "runtime:autoscaler": "node scripts/runtime-autoscaler.mjs"
   },
   "dependencies": {
     "@vitejs/plugin-react": "^5.0.0",
