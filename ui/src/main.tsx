@@ -46,8 +46,8 @@ const publicText = {
   ru: {
     access: "Доступ",
     account: "Аккаунт",
-    accountFound: "Аккаунт найден",
-    accountNew: "Создать аккаунт",
+    accountFound: "Подтверждение входа",
+    accountNew: "Регистрация аккаунта",
     back: "Назад",
     continue: "Продолжить",
     diagnostics: "Диагностика",
@@ -60,68 +60,73 @@ const publicText = {
     signedIn: "Вход выполнен",
     theme: "Тема",
     username: "Никнейм",
-    passwordHint: "Введите пароль для найденного аккаунта.",
-    registerHint: "Такого пользователя пока нет. Заполните email, никнейм и пароль, чтобы создать аккаунт.",
+    passwordHint: "Аккаунт найден. Введите пароль, чтобы открыть консоль.",
+    registerHint: "Аккаунт с таким идентификатором не найден. Заполните данные для регистрации.",
     subtitle: "Консоль для приватных OpenAPI-проектов, mock-ссылок, сценариев ответов и логов.",
+    authTitle: "Вход в консоль управления mock API",
+    authCopy: "Используйте email или никнейм. Если аккаунт уже существует, система запросит пароль; если нет, откроет регистрацию с тем же идентификатором.",
+    authEntryTitle: "Вход или регистрация",
+    authFlow: ["OpenAPI-контракты", "Приватные проекты", "Runtime и сценарии", "Журналы и аудит"],
+    authBenefits: ["Ролевой доступ к проектам", "Управление спецификациями и instance", "История запросов и действий"],
     landingNavFeatures: "Возможности",
     landingNavWorkflow: "Как работает",
     landingNavSecurity: "Доступ",
-    landingHeroBadge: "Когда контракт уже есть, а стенда ещё нет",
-    heroTitle: "Backend ещё в работе. API уже можно дать команде.",
-    heroCopy: "Загрузите OpenAPI-файл, и MSaaS поднимет mock-адрес для проекта. Фронтенд подключается к нему как к обычному API, QA проверяет сценарии, а в логах видно, что пришло и почему вернулся именно такой ответ.",
-    landingPrimaryCta: "Собрать первый mock",
-    landingSecondaryCta: "Войти в консоль",
-    landingHeroProofs: ["Один URL для всей команды", "Ответы берутся из OpenAPI", "Логи без догадок"],
-    landingAudience: ["Frontend", "QA", "Демо", "Интеграции"],
+    landingHeroBadge: "Платформа управления mock API по OpenAPI-контрактам",
+    heroTitle: "Mock Server as a Service для разработки и тестирования API",
+    heroCopy: "MSaaS преобразует OpenAPI-спецификации в управляемые mock-сервисы с приватными проектами, сценариями ответов, профилями окружений и журналом запросов. Команды могут проверять интеграции до готовности основного backend-сервиса.",
+    landingPrimaryCta: "Создать проект",
+    landingSecondaryCta: "Открыть консоль",
+    landingHeroProofs: ["Приватные проекты", "Публикация по защищённой ссылке", "Аудит и журналы запросов"],
+    landingAudience: ["Разработка", "QA", "Интеграции", "Демонстрационные стенды"],
     landingProofLabel: "Ключевые преимущества",
     landingMetrics: [
-      { value: "5 минут", label: "обычно хватает, чтобы получить первый рабочий URL" },
-      { value: "1 ссылка", label: "для фронтенда, автотестов и демо" },
-      { value: "Без копий", label: "не нужно пересылать JSON-файлы и держать разные версии ответа" },
-      { value: "Приватно", label: "проект и логи видят только участники" }
+      { value: "OpenAPI", label: "контракт становится основой управляемого mock-сервиса" },
+      { value: "1 URL", label: "для клиентских приложений, автотестов и интеграционных проверок" },
+      { value: "Profiles", label: "отдельные режимы поведения для разработки, QA и демонстраций" },
+      { value: "Private", label: "проекты, настройки и журналы доступны только участникам" }
     ],
-    landingProblemTitle: "Обычно всё тормозит не из-за кода, а из-за ожидания стенда",
-    landingProblemCopy: "Контракт уже согласован, макеты готовы, задачи взяты в работу, но нормального API ещё нет. В итоге появляются временные JSON-файлы, локальные заглушки и долгие вопросы о том, что именно отправлял клиент. MSaaS закрывает этот промежуток.",
+    landingProblemTitle: "Единая среда для проверки API до готовности основного сервиса",
+    landingProblemCopy: "После согласования API-контракта команде часто требуется стабильная среда для разработки интерфейсов, автотестов и интеграционных проверок. MSaaS предоставляет такую среду на основе спецификации, сохраняя историю запросов и настройки поведения mock-сервиса.",
     landingProblems: [
-      { title: "Фронтенду нужен живой адрес", body: "Не надо ждать деплой backend-сервиса. Подставляете mock URL в приложение и проверяете реальные HTTP-запросы." },
-      { title: "QA хочет повторяемый стенд", body: "Один опубликованный instance ведёт себя одинаково для всех. Ошибки, задержки и нестандартные ответы включаются из консоли." },
-      { title: "Демо лучше готовить заранее", body: "Нужен успешный путь, ошибка или медленный ответ: включаете нужный сценарий в консоли и спокойно показываете." }
+      { title: "Разработка клиентских приложений", body: "Команда получает стабильный mock URL и может выполнять реальные HTTP-запросы без ожидания развёртывания основного backend-сервиса." },
+      { title: "Тестирование API-контрактов", body: "Опубликованный instance возвращает предсказуемые ответы, поддерживает ошибки, задержки и отдельные сценарии для проверки граничных состояний." },
+      { title: "Демонстрационные окружения", body: "Для презентаций и внутренних проверок можно заранее подготовить нужные статусы, тела ответов и задержки без изменения кода приложения." }
     ],
-    landingFeaturesTitle: "Что помогает в обычной работе",
-    landingFeaturesCopy: "MSaaS нужен не для красивой витрины, а для дней, когда контракт уже согласован, а настоящий сервис ещё не готов. Команда получает один адрес, понятные ответы и историю вызовов.",
+    landingFeaturesTitle: "Основные возможности платформы",
+    landingFeaturesCopy: "MSaaS фокусируется на управляемом жизненном цикле mock API: от загрузки спецификации до публикации URL, настройки сценариев, контроля доступа и анализа запросов.",
     landingFeatures: [
-      { title: "Ответы из контракта", body: "Если в OpenAPI есть example, сервис вернёт его. Если примера нет, соберёт аккуратный JSON по schema, чтобы клиенту было с чем работать." },
-      { title: "Сценарии без правки кода", body: "Нужно проверить пустой список, ошибку оплаты или задержку? Выбираете route и задаёте нужный ответ в консоли." },
-      { title: "Разные режимы для команды", body: "Для разработки можно оставить быстрые ответы, для QA включить ошибки, для демо подготовить стабильный happy path." },
-      { title: "Логи без угадывания", body: "Видно, какой запрос пришёл, какой статус ушёл обратно и был ли найден подходящий маршрут в контракте." }
+      { title: "Генерация ответов по контракту", body: "Сервис использует OpenAPI examples, named examples и schema-based generation, чтобы возвращать корректные JSON-ответы без ручной подготовки каждого payload." },
+      { title: "Сценарии и правила ответов", body: "Для конкретных операций можно переопределять статус, тело, headers и задержку, а также применять декларативные правила к отдельным полям ответа." },
+      { title: "Профили окружений", body: "Instance может работать в разных профилях, например для разработки, QA или демонстрационного стенда, без пересоздания публичной ссылки." },
+      { title: "Наблюдаемость запросов", body: "Журналы показывают метод, путь, статус, matched/unmatched, источник ответа и применённые сценарии или правила." }
     ],
-    landingWorkflowTitle: "Как это выглядит в работе",
-    landingWorkflowCopy: "Всё укладывается в обычный рабочий поток: создали проект, загрузили OpenAPI, проверили preview и отдали ссылку команде.",
+    landingWorkflowTitle: "Процесс работы",
+    landingWorkflowCopy: "Платформа поддерживает последовательный workflow: проект, версия спецификации, проверка маршрутов, публикация instance и дальнейшее сопровождение запросов.",
     landingWorkflowSteps: [
-      { title: "Создаёте проект", body: "Проект хранит спецификации, опубликованные mock-и, доступы и историю запросов." },
-      { title: "Загружаете OpenAPI", body: "Сервис разбирает routes, методы, параметры, body и доступные ответы." },
-      { title: "Проверяете ответ", body: "В preview можно выбрать route, status и seed, чтобы понять, что увидит клиент." },
-      { title: "Публикуете URL", body: "Ссылка вида /mock/{token}/... сразу готова для приложения, Postman или автотестов." }
+      { title: "Создание проекта", body: "Проект объединяет спецификации, опубликованные mock-instance, участников, настройки доступа и историю запросов." },
+      { title: "Загрузка OpenAPI", body: "Сервис нормализует маршруты, методы, параметры, request body, response examples и схемы ответов." },
+      { title: "Предварительная проверка", body: "В preview можно выбрать route, status, content type, example и seed, чтобы проверить будущий ответ до публикации." },
+      { title: "Публикация URL", body: "После публикации создаётся ссылка вида /mock/{token}/..., которую можно использовать в приложениях, Postman и автотестах." }
     ],
-    landingSecurityTitle: "Проект можно открыть команде, не отдавая управление всем подряд",
-    landingSecurityCopy: "Владелец добавляет участников в проект и выбирает роль. Mock URL можно дать тем, кто должен вызывать API, а спецификации, state, логи и настройки остаются внутри рабочей области.",
+    landingSecurityTitle: "Контроль доступа к проектам и данным",
+    landingSecurityCopy: "Каждый проект имеет владельца и участников с ролями. Публичный mock URL можно передавать внешним потребителям API, при этом спецификации, state, журналы и настройки остаются доступными только внутри проекта.",
     landingSecurityItems: [
       "Участников можно добавлять в проект",
       "Роли разделяют просмотр и управление",
       "Mock-ссылку можно пересоздать",
       "Логи и state видят только участники"
     ],
-    landingMockStatusLabel: "Опубликованный mock",
+    landingMockStatusLabel: "Опубликованный instance",
     landingMockInstance: "orders-api / demo",
     landingMockStatus: "Готов",
     landingMockUrlLabel: "Public URL",
     landingMockUrl: "http://localhost:8081/mock/tk_demo/orders",
     landingMockStats: [
-      { value: "43", label: "вызова сегодня" },
-      { value: "8 мс", label: "обычный ответ" },
-      { value: "2", label: "mismatch" }
+      { value: "43", label: "запроса за сегодня" },
+      { value: "8 мс", label: "среднее время ответа" },
+      { value: "2", label: "несовпадения с контрактом" }
     ],
-    landingMockLogTitle: "Что пришло сейчас",
+    landingMockLogTitle: "Последние запросы",
     landingMockLogHint: "последние вызовы",
     landingMockRequests: [
       { path: "GET /orders", status: "200" },
@@ -131,20 +136,20 @@ const publicText = {
     landingDiagnosticsPanelTitle: "Запись в логах",
     landingDiagnosticsPanelStatus: "unmatched",
     landingDiagnosticsRequestLabel: "Вызов",
-    landingDiagnosticsReasonLabel: "Что видно",
+    landingDiagnosticsReasonLabel: "Результат обработки",
     landingDiagnosticsReason: "status 404 · matched: false · source: fallback",
     landingDiagnosticsSpecLabel: "Контекст",
     landingDiagnosticsSpecValue: "demo profile · orders-api@2.1.0",
-    landingDiagnosticsCta: "Проверить на своём контракте",
-    landingDiagnosticsTitle: "Логи показывают, что реально произошло",
-    landingDiagnosticsCopy: "Когда интерфейс получил 404 или неожиданный JSON, можно открыть лог и увидеть метод, путь, статус, совпал ли маршрут и откуда взялся ответ: example, scenario, rule или fallback.",
-    landingFinalTitle: "Дайте команде стабильный mock API без лишней ручной работы",
-    landingFinalCopy: "Загрузите OpenAPI-файл и получите адрес, который можно отдать frontend, QA и демо-стенду уже сегодня."
+    landingDiagnosticsCta: "Проверить спецификацию",
+    landingDiagnosticsTitle: "Диагностика запросов и источников ответа",
+    landingDiagnosticsCopy: "Журнал фиксирует method, path, status, matched/unmatched, активный профиль и источник ответа: OpenAPI example, schema generation, scenario, response rule или fallback.",
+    landingFinalTitle: "Подготовьте управляемый mock API для команды",
+    landingFinalCopy: "Загрузите OpenAPI-спецификацию, опубликуйте instance и используйте стабильный URL для разработки, тестирования и демонстрационных окружений."
   },
   en: {
     access: "Access",
     account: "Account",
-    accountFound: "Account found",
+    accountFound: "Confirm sign-in",
     accountNew: "Create account",
     back: "Back",
     continue: "Continue",
@@ -158,68 +163,73 @@ const publicText = {
     signedIn: "Signed in",
     theme: "Theme",
     username: "Username",
-    passwordHint: "Enter the password for the account we found.",
-    registerHint: "No user exists yet. Add email, username, and password to create an account.",
+    passwordHint: "The account was found. Enter the password to open the console.",
+    registerHint: "No account exists for this identifier. Complete the fields to register.",
     subtitle: "Console for private OpenAPI projects, mock links, response scenarios, and logs.",
+    authTitle: "Sign in to the mock API console",
+    authCopy: "Use your email or username. If the account exists, the console will request the password; otherwise it will continue with registration using the same identifier.",
+    authEntryTitle: "Sign in or create account",
+    authFlow: ["OpenAPI contracts", "Private projects", "Runtime and scenarios", "Logs and audit"],
+    authBenefits: ["Role-based project access", "Specification and instance management", "Request and activity history"],
     landingNavFeatures: "Features",
     landingNavWorkflow: "How it works",
     landingNavSecurity: "Access",
-    landingHeroBadge: "For the gap between signed-off contract and working environment",
-    heroTitle: "The backend is still in progress. The API can already be used.",
-    heroCopy: "Upload an OpenAPI file and MSaaS gives the project a mock URL. Frontend uses it like a normal API, QA runs scenarios, and logs show what arrived and why that response went out.",
-    landingPrimaryCta: "Build the first mock",
+    landingHeroBadge: "Managed mock API platform for OpenAPI contracts",
+    heroTitle: "Mock Server as a Service for API development and testing",
+    heroCopy: "MSaaS turns OpenAPI specifications into managed mock services with private projects, response scenarios, environment profiles, and request logs. Teams can validate integrations before the primary backend service is available.",
+    landingPrimaryCta: "Create project",
     landingSecondaryCta: "Open console",
-    landingHeroProofs: ["One URL for the team", "Responses come from OpenAPI", "Logs explain what happened"],
-    landingAudience: ["Frontend", "QA", "Demos", "Integrations"],
+    landingHeroProofs: ["Private projects", "Published by secure link", "Audit and request logs"],
+    landingAudience: ["Development", "QA", "Integrations", "Demo environments"],
     landingProofLabel: "Key benefits",
     landingMetrics: [
-      { value: "5 min", label: "usually enough to get the first callable URL" },
-      { value: "1 link", label: "for frontend, tests, and demos" },
-      { value: "No copies", label: "no JSON files passed around with different response versions" },
-      { value: "Private", label: "only members see the project and logs" }
+      { value: "OpenAPI", label: "the contract becomes the source of a managed mock service" },
+      { value: "1 URL", label: "for client applications, automated tests, and integration checks" },
+      { value: "Profiles", label: "separate behavior modes for development, QA, and demos" },
+      { value: "Private", label: "projects, settings, and logs are available only to members" }
     ],
-    landingProblemTitle: "Teams usually slow down while waiting for the test environment",
-    landingProblemCopy: "The contract is agreed, screens are ready, tickets are already in progress, but there is still no real API to call. That is when temporary JSON files, local stubs, and long questions about what the client sent appear. MSaaS covers that gap.",
+    landingProblemTitle: "A controlled API environment before the primary service is ready",
+    landingProblemCopy: "After an API contract is approved, teams often need a stable environment for interface development, automated tests, and integration checks. MSaaS provides that environment from the specification while preserving request history and mock behavior settings.",
     landingProblems: [
-      { title: "Frontend needs a real address", body: "No need to wait for a backend deployment. Put the mock URL into the app and test real HTTP calls." },
-      { title: "QA wants a repeatable target", body: "One published instance behaves the same for everyone. Errors, delays, and unusual responses are turned on from the console." },
-      { title: "Demos are better prepared", body: "Need a happy path, an error, or a slow response? Turn on the right scenario in the console and show it calmly." }
+      { title: "Client application development", body: "The team receives a stable mock URL and can execute real HTTP requests without waiting for the primary backend deployment." },
+      { title: "API contract testing", body: "A published instance returns predictable responses and supports errors, delays, and scenarios for edge-case verification." },
+      { title: "Demonstration environments", body: "Required statuses, response bodies, and latency settings can be prepared in advance without changing application code." }
     ],
-    landingFeaturesTitle: "What helps in everyday work",
-    landingFeaturesCopy: "MSaaS is for the days when the contract is agreed, but the real service is not ready yet. The team gets one address, understandable responses, and request history.",
+    landingFeaturesTitle: "Core platform capabilities",
+    landingFeaturesCopy: "MSaaS supports the managed lifecycle of a mock API: specification upload, URL publication, scenario configuration, access control, and request analysis.",
     landingFeatures: [
-      { title: "Responses from the contract", body: "If OpenAPI has an example, the service returns it. If not, it builds clean JSON from the schema so the client has something useful to call." },
-      { title: "Scenarios without code changes", body: "Need an empty list, payment error, or delay? Pick a route and set the response in the console." },
-      { title: "Different modes for the team", body: "Development can stay fast, QA can enable errors, and demos can keep a stable happy path." },
-      { title: "Logs without guessing", body: "See which request arrived, which status went back, and whether a matching route was found in the contract." }
+      { title: "Contract-based responses", body: "The service uses OpenAPI examples, named examples, and schema-based generation to return valid JSON responses without manually preparing every payload." },
+      { title: "Scenarios and response rules", body: "For specific operations, teams can override status, body, headers, and delay, or apply declarative rules to individual response fields." },
+      { title: "Environment profiles", body: "An instance can use different behavior profiles for development, QA, or demonstration environments without changing the public URL." },
+      { title: "Request observability", body: "Logs show method, path, status, matched/unmatched, response source, and applied scenarios or rules." }
     ],
-    landingWorkflowTitle: "What the workflow looks like",
-    landingWorkflowCopy: "It fits into the normal workflow: create a project, upload OpenAPI, check the preview, and share the link with the team.",
+    landingWorkflowTitle: "Workflow",
+    landingWorkflowCopy: "The platform follows a structured workflow: project, specification version, route validation, instance publication, and request monitoring.",
     landingWorkflowSteps: [
-      { title: "Create a project", body: "A project keeps specs, published mocks, access, and request history together." },
-      { title: "Upload OpenAPI", body: "The service reads routes, methods, parameters, body, and available responses." },
-      { title: "Check the response", body: "Use preview to choose route, status, and seed before the client calls it." },
-      { title: "Publish the URL", body: "A /mock/{token}/... link is ready for the app, Postman, or automated tests." }
+      { title: "Create a project", body: "A project keeps specifications, published mock instances, members, access settings, and request history together." },
+      { title: "Upload OpenAPI", body: "The service normalizes routes, methods, parameters, request bodies, response examples, and response schemas." },
+      { title: "Preview responses", body: "Preview lets users choose route, status, content type, example, and seed before publishing the instance." },
+      { title: "Publish the URL", body: "After publication, a /mock/{token}/... link is available for applications, Postman, and automated tests." }
     ],
-    landingSecurityTitle: "Open the project to the team without giving everyone full control",
-    landingSecurityCopy: "The owner adds members to a project and chooses their role. The mock URL can be shared with people who need to call the API, while specs, state, logs, and settings stay inside the workspace.",
+    landingSecurityTitle: "Project and data access control",
+    landingSecurityCopy: "Each project has an owner and role-based members. The public mock URL can be shared with API consumers, while specifications, state, logs, and settings remain available only inside the project.",
     landingSecurityItems: [
       "Members can be added to a project",
       "Roles separate viewing and management",
       "Mock links can be rotated",
       "Logs and state are visible only to members"
     ],
-    landingMockStatusLabel: "Published mock",
+    landingMockStatusLabel: "Published instance",
     landingMockInstance: "orders-api / demo",
     landingMockStatus: "Ready",
     landingMockUrlLabel: "Public URL",
     landingMockUrl: "http://localhost:8081/mock/tk_demo/orders",
     landingMockStats: [
-      { value: "43", label: "calls today" },
-      { value: "8 ms", label: "usual response" },
-      { value: "2", label: "mismatch" }
+      { value: "43", label: "requests today" },
+      { value: "8 ms", label: "average response time" },
+      { value: "2", label: "contract mismatches" }
     ],
-    landingMockLogTitle: "What just came in",
+    landingMockLogTitle: "Latest requests",
     landingMockLogHint: "latest calls",
     landingMockRequests: [
       { path: "GET /orders", status: "200" },
@@ -229,15 +239,15 @@ const publicText = {
     landingDiagnosticsPanelTitle: "Log entry",
     landingDiagnosticsPanelStatus: "unmatched",
     landingDiagnosticsRequestLabel: "Call",
-    landingDiagnosticsReasonLabel: "What you see",
+    landingDiagnosticsReasonLabel: "Processing result",
     landingDiagnosticsReason: "status 404 · matched: false · source: fallback",
     landingDiagnosticsSpecLabel: "Context",
     landingDiagnosticsSpecValue: "demo profile · orders-api@2.1.0",
-    landingDiagnosticsCta: "Try it with your contract",
-    landingDiagnosticsTitle: "Logs show what actually happened",
-    landingDiagnosticsCopy: "When the UI gets a 404 or unexpected JSON, open the log and see the method, path, status, whether the route matched, and where the response came from: example, scenario, rule, or fallback.",
-    landingFinalTitle: "Give the team a stable mock API without extra manual work",
-    landingFinalCopy: "Upload an OpenAPI file and get a URL you can give to frontend, QA, and demo environments today."
+    landingDiagnosticsCta: "Validate a specification",
+    landingDiagnosticsTitle: "Request diagnostics and response source tracking",
+    landingDiagnosticsCopy: "The request log records method, path, status, matched/unmatched, active profile, and response source: OpenAPI example, schema generation, scenario, response rule, or fallback.",
+    landingFinalTitle: "Prepare a managed mock API for your team",
+    landingFinalCopy: "Upload an OpenAPI specification, publish an instance, and use a stable URL for development, testing, and demonstration environments."
   }
 } as const;
 
@@ -267,20 +277,19 @@ function PublicApp() {
   }, [lang]);
 
   useEffect(() => {
-    const syncAuth = () => setToken(localStorage.getItem("msaas.token") ?? "");
-    const onPopState = () => {
+    const syncPublicState = () => {
       const route = publicRoute(window.location.pathname);
       setPublicView(route.view);
       setAuthStep(route.authStep);
-      syncAuth();
+      setToken(localStorage.getItem("msaas.token") ?? "");
     };
-    window.addEventListener("storage", syncAuth);
-    window.addEventListener("msaas-auth-change", syncAuth);
-    window.addEventListener("popstate", onPopState);
+    window.addEventListener("storage", syncPublicState);
+    window.addEventListener("msaas-auth-change", syncPublicState);
+    window.addEventListener("popstate", syncPublicState);
     return () => {
-      window.removeEventListener("storage", syncAuth);
-      window.removeEventListener("msaas-auth-change", syncAuth);
-      window.removeEventListener("popstate", onPopState);
+      window.removeEventListener("storage", syncPublicState);
+      window.removeEventListener("msaas-auth-change", syncPublicState);
+      window.removeEventListener("popstate", syncPublicState);
     };
   }, []);
 
@@ -334,18 +343,27 @@ function PublicApp() {
         <section className="auth-grid">
           <div className="auth-copy">
             <p className="eyebrow">MSaaS Console</p>
-            <h1>{t.subtitle}</h1>
+            <h1>{t.authTitle}</h1>
+            <p className="auth-lead">{t.authCopy}</p>
             <div className="pipeline" aria-label="pipeline">
-              <FlowStep icon={<FileJson size={20} />} label="OpenAPI" />
-              <FlowStep icon={<Zap size={20} />} label="Mock URL" />
-              <FlowStep icon={<ShieldCheck size={20} />} label="Private project" />
-              <FlowStep icon={<Activity size={20} />} label="Logs" />
+              {t.authFlow.map((label, index) => (
+                <FlowStep
+                  key={label}
+                  icon={[<FileJson size={20} />, <ShieldCheck size={20} />, <Zap size={20} />, <Activity size={20} />][index]}
+                  label={label}
+                />
+              ))}
+            </div>
+            <div className="auth-benefits">
+              {t.authBenefits.map((item) => (
+                <span key={item}><CheckCircle2 size={15} />{item}</span>
+              ))}
             </div>
           </div>
           <section className="auth-panel" aria-label={t.access}>
             <div>
               <p className="eyebrow">{t.account}</p>
-              <h2>{authStep === "register" ? t.accountNew : authStep === "password" ? t.accountFound : t.access}</h2>
+              <h2>{authStep === "register" ? t.accountNew : authStep === "password" ? t.accountFound : t.authEntryTitle}</h2>
             </div>
             {authStep === "identifier" && (
               <label>{t.emailOrUsername}<input value={authIdentifier} onChange={(event) => setAuthIdentifier(event.target.value)} autoFocus /></label>
@@ -711,13 +729,13 @@ function suggestUsername(identifier: string) {
 
 function Brand() {
   return (
-    <div className="brand">
+    <a className="brand" href="/" aria-label="MSaaS home">
       <span className="brand-mark"><Server size={20} /></span>
       <span>
         <strong>MSaaS</strong>
         <small>Mock Server as a Service</small>
       </span>
-    </div>
+    </a>
   );
 }
 
