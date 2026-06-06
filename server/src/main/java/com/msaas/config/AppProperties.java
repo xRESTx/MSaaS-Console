@@ -103,6 +103,7 @@ public class AppProperties {
         private String internalSecret = "local-runtime-secret";
         private long staleAfterSeconds = 30;
         private long heartbeatIntervalSeconds = 5;
+        private long workerCleanupAfterSeconds = 86400;
         private int maxSlotsPerWorker = 250;
         private long slotIdleTtlSeconds = 1800;
         private long slotCleanupDelayMs = 60000;
@@ -153,6 +154,14 @@ public class AppProperties {
 
         public void setHeartbeatIntervalSeconds(long heartbeatIntervalSeconds) {
             this.heartbeatIntervalSeconds = heartbeatIntervalSeconds;
+        }
+
+        public long getWorkerCleanupAfterSeconds() {
+            return workerCleanupAfterSeconds <= 0 ? 86400 : workerCleanupAfterSeconds;
+        }
+
+        public void setWorkerCleanupAfterSeconds(long workerCleanupAfterSeconds) {
+            this.workerCleanupAfterSeconds = workerCleanupAfterSeconds;
         }
 
         public int getMaxSlotsPerWorker() {

@@ -160,7 +160,7 @@ paths:
 }
 
 async function registerUser(index) {
-  const username = `load_${runId}_${index}`.replace(/[^A-Za-z0-9_.-]/g, "_").slice(0, 32);
+  const username = `load_${index}_${runId}`.replace(/[^A-Za-z0-9_.-]/g, "_").slice(0, 32);
   const auth = await request("/api/auth/register", {
     method: "POST",
     label: `register user ${index}`,

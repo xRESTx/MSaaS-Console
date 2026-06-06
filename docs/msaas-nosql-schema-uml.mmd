@@ -1,0 +1,157 @@
+classDiagram
+    direction LR
+
+    class users {
+      <<collection>>
+      +String _id
+      +String email unique
+      +String username unique sparse
+      +String passwordHash
+      +SystemRole systemRole
+      +Boolean disabled
+      +Instant createdAt
+    }
+
+    class projects {
+      <<collection>>
+      +String _id
+      +String ownerId indexed
+      +String name
+      +String description
+      +ProjectMember[] members
+      +Instant createdAt
+      +Instant updatedAt
+    }
+
+    class spec_versions {
+      <<collection>>
+      +String _id
+      +String projectId indexed
+      +Integer versionNumber
+      +String name
+      +String source
+      +ValidationStatus status
+      +String[] validationErrors
+      +NormalizedContract normalizedContract
+      +Instant createdAt
+    }
+
+    class mock_instances {
+      <<collection>>
+      +String _id
+      +String projectId indexed
+      +String specVersionId indexed
+      +String publicTokenHash unique
+      +String publicTokenPreview
+      +Boolean requireApiKey
+      +String apiKeyHash
+      +InstanceMode mode
+      +InstanceStatus status
+      +NormalizedContract contract
+      +MockScenario[] scenarios
+      +ResponseRule[] responseRules
+      +MockProfile[] profiles
+      +String workerKey
+      +Instant createdAt
+      +Instant updatedAt
+    }
+
+    class request_logs {
+      <<collection>>
+      +String _id
+      +String projectId indexed
+      +String instanceId indexed
+      +String method
+      +String path
+      +String queryString
+      +Map requestHeaders
+      +String requestBody
+      +Integer responseStatus
+      +Boolean matched
+      +String responseSource
+      +Long latencyMs
+      +Instant receivedAt
+    }
+
+    class audit_events {
+      <<collection>>
+      +String _id
+      +String projectId indexed
+      +String actorId indexed
+      +String action
+      +String targetType
+      +String targetId
+      +String message
+      +Map metadata
+      +Instant createdAt
+    }
+
+    class runtime_workers {
+      <<collection>>
+      +String _id
+      +String workerKey unique
+      +String baseUrl
+      +RuntimeWorkerStatus status
+      +Integer slotCount
+      +Map labels
+      +Instant lastHeartbeatAt
+    }
+
+    class ProjectMember {
+      <<embedded>>
+      +String userId
+      +String email
+      +String username
+      +ProjectRole role
+      +Instant addedAt
+    }
+
+    class MockScenario {
+      <<embedded>>
+      +String id
+      +Boolean enabled
+      +Integer priority
+      +String operationId
+      +String method
+      +String pathTemplate
+      +Integer statusCode
+      +Object body
+    }
+
+    class ResponseRule {
+      <<embedded>>
+      +String id
+      +String fieldPath
+      +String type
+      +Object fixedValue
+      +Integer minValue
+      +Integer maxValue
+      +Object[] enumValues
+      +String template
+    }
+
+    class MockProfile {
+      <<embedded>>
+      +String id
+      +String name
+      +Boolean faultProfileEnabled
+      +Integer faultErrorRate
+      +Integer faultStatusCode
+      +Integer latencyMinMs
+      +Integer latencyMaxMs
+    }
+
+    users "1" --> "0..*" projects : ownerId
+    users "1" --> "0..*" projects : members.userId
+    projects "1" --> "0..*" spec_versions : projectId
+    projects "1" --> "0..*" mock_instances : projectId
+    spec_versions "1" --> "0..*" mock_instances : specVersionId
+    mock_instances "1" --> "0..*" request_logs : instanceId
+    projects "1" --> "0..*" request_logs : projectId
+    users "1" --> "0..*" audit_events : actorId
+    projects "1" --> "0..*" audit_events : projectId
+    runtime_workers "1" --> "0..*" mock_instances : workerKey
+    projects *-- ProjectMember : embeds
+    mock_instances *-- MockScenario : embeds
+    mock_instances *-- ResponseRule : embeds
+    mock_instances *-- MockProfile : embeds

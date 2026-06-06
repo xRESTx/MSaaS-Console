@@ -59,6 +59,16 @@ public class RuntimePlaneService {
         heartbeat(workerKey(), baseUrl(), RuntimeWorkerStatus.UP, runtimeRegistry.slotCount(), Map.of("kind", properties.getRuntime().getRole().name().toLowerCase()));
     }
 
+    @Scheduled(fixedDelayString = "${APP_RUNTIME_WORKER_CLEANUP_DELAY_MS:86400000}")
+    void cleanupDownWorkers() {
+        workerRepository.findAll().forEach(this::effectiveWorker);
+        workerRepository.deleteByStatusAndLastHeartbeatAtBefore(
+                RuntimeWorkerStatus.DOWN,
+                Instant.now().minusSeconds(properties.getRuntime().getWorkerCleanupAfterSeconds())
+        );
+        workerRepository.deleteByStatusAndLastHeartbeatAtIsNull(RuntimeWorkerStatus.DOWN);
+    }
+
     public RuntimeWorker heartbeat(String workerKey, String baseUrl, RuntimeWorkerStatus status, int slotCount, Map<String, String> labels) {
         RuntimeWorker worker = workerRepository.findByWorkerKey(workerKey)
                 .orElseGet(() -> new RuntimeWorker(workerKey, baseUrl, status, slotCount, labels));
@@ -72,6 +82,7 @@ public class RuntimePlaneService {
 
     public List<RuntimeWorker> workers() {
         heartbeatLocalWorker();
+        cleanupDownWorkers();
         return workerRepository.findAll().stream().map(this::effectiveWorker).toList();
     }
 

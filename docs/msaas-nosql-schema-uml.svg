@@ -1,0 +1,253 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1080" viewBox="0 0 1600 1080" role="img" aria-labelledby="title desc">
+  <title id="title">UML-like NoSQL schema diagram for MSaaS MongoDB</title>
+  <desc id="desc">Diagram of MongoDB collections, embedded documents, and references used by the MSaaS application.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#4b5563"/>
+    </marker>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%">
+      <feDropShadow dx="0" dy="8" stdDeviation="8" flood-color="#0f172a" flood-opacity="0.10"/>
+    </filter>
+    <style>
+      .page { fill: #f8fafc; }
+      .title { font: 700 34px Arial, sans-serif; fill: #111827; letter-spacing: 0; }
+      .subtitle { font: 400 17px Arial, sans-serif; fill: #4b5563; letter-spacing: 0; }
+      .box { fill: #ffffff; stroke: #cbd5e1; stroke-width: 1.4; rx: 8; filter: url(#shadow); }
+      .box.embedded { fill: #fff7ed; stroke: #fdba74; }
+      .box.runtime { fill: #ecfeff; stroke: #67e8f9; }
+      .box.log { fill: #f0fdf4; stroke: #86efac; }
+      .box.audit { fill: #fefce8; stroke: #fde047; }
+      .header { fill: #1f2937; }
+      .header.embedded { fill: #9a3412; }
+      .header.runtime { fill: #155e75; }
+      .header.log { fill: #166534; }
+      .header.audit { fill: #854d0e; }
+      .class-name { font: 700 18px Arial, sans-serif; fill: #ffffff; letter-spacing: 0; }
+      .stereo { font: 400 12px Arial, sans-serif; fill: #d1d5db; letter-spacing: 0; }
+      .field { font: 400 13px Consolas, "Courier New", monospace; fill: #111827; }
+      .field-muted { font: 400 13px Consolas, "Courier New", monospace; fill: #64748b; }
+      .relation { fill: none; stroke: #4b5563; stroke-width: 1.5; marker-end: url(#arrow); }
+      .embed-relation { fill: none; stroke: #ea580c; stroke-width: 1.4; stroke-dasharray: 6 5; marker-end: url(#arrow); }
+      .label-bg { fill: #f8fafc; }
+      .label { font: 600 12px Arial, sans-serif; fill: #374151; letter-spacing: 0; }
+      .legend-title { font: 700 14px Arial, sans-serif; fill: #111827; }
+      .legend { font: 400 13px Arial, sans-serif; fill: #374151; }
+    </style>
+  </defs>
+
+  <rect class="page" width="1600" height="1080"/>
+  <text x="60" y="58" class="title">UML-like схема NoSQL базы данных MSaaS</text>
+  <text x="60" y="86" class="subtitle">Основные коллекции MongoDB, вложенные документы и логические связи между сущностями</text>
+
+  <!-- Relation lines -->
+  <path class="relation" d="M 330 214 C 378 214, 382 214, 430 214"/>
+  <rect class="label-bg" x="344" y="196" width="76" height="18"/>
+  <text class="label" x="350" y="210">ownerId</text>
+
+  <path class="relation" d="M 330 278 C 376 312, 384 318, 430 336"/>
+  <rect class="label-bg" x="342" y="302" width="98" height="18"/>
+  <text class="label" x="348" y="316">members.userId</text>
+
+  <path class="relation" d="M 700 214 C 748 214, 752 214, 800 214"/>
+  <rect class="label-bg" x="717" y="196" width="72" height="18"/>
+  <text class="label" x="723" y="210">projectId</text>
+
+  <path class="relation" d="M 1070 214 C 1118 214, 1122 214, 1170 214"/>
+  <rect class="label-bg" x="1084" y="196" width="94" height="18"/>
+  <text class="label" x="1090" y="210">specVersionId</text>
+
+  <path class="relation" d="M 700 350 C 860 474, 1004 486, 1170 350"/>
+  <rect class="label-bg" x="920" y="452" width="72" height="18"/>
+  <text class="label" x="926" y="466">projectId</text>
+
+  <path class="relation" d="M 1325 390 C 1325 452, 1325 492, 1325 555"/>
+  <rect class="label-bg" x="1281" y="461" width="76" height="18"/>
+  <text class="label" x="1287" y="475">instanceId</text>
+
+  <path class="relation" d="M 700 380 C 840 612, 1020 650, 1170 650"/>
+  <rect class="label-bg" x="892" y="628" width="72" height="18"/>
+  <text class="label" x="898" y="642">projectId</text>
+
+  <path class="relation" d="M 195 390 C 195 618, 302 668, 430 668"/>
+  <rect class="label-bg" x="234" y="633" width="58" height="18"/>
+  <text class="label" x="240" y="647">actorId</text>
+
+  <path class="relation" d="M 565 390 C 565 454, 565 492, 565 555"/>
+  <rect class="label-bg" x="527" y="462" width="72" height="18"/>
+  <text class="label" x="533" y="476">projectId</text>
+
+  <path class="relation" d="M 1070 646 C 1122 530, 1144 434, 1170 320"/>
+  <rect class="label-bg" x="1084" y="536" width="76" height="18"/>
+  <text class="label" x="1090" y="550">workerKey</text>
+
+  <path class="embed-relation" d="M 565 390 C 565 438, 250 448, 250 496"/>
+  <path class="embed-relation" d="M 1325 390 C 1325 438, 250 448, 250 732"/>
+  <path class="embed-relation" d="M 1325 390 C 1325 438, 565 448, 565 802"/>
+  <path class="embed-relation" d="M 1325 390 C 1325 438, 920 448, 920 802"/>
+
+  <!-- users -->
+  <g transform="translate(60 125)">
+    <rect class="box" width="270" height="265"/>
+    <path class="header" d="M 0 8 Q 0 0 8 0 H 262 Q 270 0 270 8 V 58 H 0 Z"/>
+    <text class="class-name" x="18" y="28">users</text>
+    <text class="stereo" x="18" y="47">&lt;&lt;collection&gt;&gt;</text>
+    <text class="field" x="18" y="84">+ _id: String</text>
+    <text class="field" x="18" y="107">+ email: String</text>
+    <text class="field-muted" x="18" y="130">  unique index</text>
+    <text class="field" x="18" y="153">+ username: String</text>
+    <text class="field-muted" x="18" y="176">  unique sparse index</text>
+    <text class="field" x="18" y="199">+ passwordHash: String</text>
+    <text class="field" x="18" y="222">+ systemRole: SystemRole</text>
+    <text class="field" x="18" y="245">+ disabled: Boolean</text>
+  </g>
+
+  <!-- projects -->
+  <g transform="translate(430 125)">
+    <rect class="box" width="270" height="265"/>
+    <path class="header" d="M 0 8 Q 0 0 8 0 H 262 Q 270 0 270 8 V 58 H 0 Z"/>
+    <text class="class-name" x="18" y="28">projects</text>
+    <text class="stereo" x="18" y="47">&lt;&lt;collection&gt;&gt;</text>
+    <text class="field" x="18" y="84">+ _id: String</text>
+    <text class="field" x="18" y="107">+ ownerId: String</text>
+    <text class="field-muted" x="18" y="130">  indexed, ref users._id</text>
+    <text class="field" x="18" y="153">+ name: String</text>
+    <text class="field" x="18" y="176">+ description: String</text>
+    <text class="field" x="18" y="199">+ members: ProjectMember[]</text>
+    <text class="field" x="18" y="222">+ createdAt: Instant</text>
+    <text class="field" x="18" y="245">+ updatedAt: Instant</text>
+  </g>
+
+  <!-- spec versions -->
+  <g transform="translate(800 125)">
+    <rect class="box" width="270" height="265"/>
+    <path class="header" d="M 0 8 Q 0 0 8 0 H 262 Q 270 0 270 8 V 58 H 0 Z"/>
+    <text class="class-name" x="18" y="28">spec_versions</text>
+    <text class="stereo" x="18" y="47">&lt;&lt;collection&gt;&gt;</text>
+    <text class="field" x="18" y="84">+ _id: String</text>
+    <text class="field" x="18" y="107">+ projectId: String</text>
+    <text class="field-muted" x="18" y="130">  indexed, ref projects._id</text>
+    <text class="field" x="18" y="153">+ versionNumber: Integer</text>
+    <text class="field" x="18" y="176">+ name: String</text>
+    <text class="field" x="18" y="199">+ source: String</text>
+    <text class="field" x="18" y="222">+ status: ValidationStatus</text>
+    <text class="field" x="18" y="245">+ normalizedContract: Object</text>
+  </g>
+
+  <!-- mock instances -->
+  <g transform="translate(1170 125)">
+    <rect class="box" width="330" height="265"/>
+    <path class="header" d="M 0 8 Q 0 0 8 0 H 322 Q 330 0 330 8 V 58 H 0 Z"/>
+    <text class="class-name" x="18" y="28">mock_instances</text>
+    <text class="stereo" x="18" y="47">&lt;&lt;collection&gt;&gt;</text>
+    <text class="field" x="18" y="84">+ _id: String</text>
+    <text class="field" x="18" y="107">+ projectId: String, indexed</text>
+    <text class="field" x="18" y="130">+ specVersionId: String, indexed</text>
+    <text class="field" x="18" y="153">+ publicTokenHash: String, unique</text>
+    <text class="field" x="18" y="176">+ requireApiKey: Boolean</text>
+    <text class="field" x="18" y="199">+ mode/status: Enum</text>
+    <text class="field" x="18" y="222">+ contract: NormalizedContract</text>
+    <text class="field" x="18" y="245">+ scenarios/rules/profiles: embedded[]</text>
+  </g>
+
+  <!-- audit -->
+  <g transform="translate(430 555)">
+    <rect class="box audit" width="270" height="250"/>
+    <path class="header audit" d="M 0 8 Q 0 0 8 0 H 262 Q 270 0 270 8 V 58 H 0 Z"/>
+    <text class="class-name" x="18" y="28">audit_events</text>
+    <text class="stereo" x="18" y="47">&lt;&lt;collection&gt;&gt;</text>
+    <text class="field" x="18" y="84">+ _id: String</text>
+    <text class="field" x="18" y="107">+ projectId: String, indexed</text>
+    <text class="field" x="18" y="130">+ actorId: String, indexed</text>
+    <text class="field" x="18" y="153">+ action: String</text>
+    <text class="field" x="18" y="176">+ targetType: String</text>
+    <text class="field" x="18" y="199">+ targetId: String</text>
+    <text class="field" x="18" y="222">+ metadata: Map</text>
+  </g>
+
+  <!-- runtime workers -->
+  <g transform="translate(800 555)">
+    <rect class="box runtime" width="270" height="250"/>
+    <path class="header runtime" d="M 0 8 Q 0 0 8 0 H 262 Q 270 0 270 8 V 58 H 0 Z"/>
+    <text class="class-name" x="18" y="28">runtime_workers</text>
+    <text class="stereo" x="18" y="47">&lt;&lt;collection&gt;&gt;</text>
+    <text class="field" x="18" y="84">+ _id: String</text>
+    <text class="field" x="18" y="107">+ workerKey: String</text>
+    <text class="field-muted" x="18" y="130">  unique index</text>
+    <text class="field" x="18" y="153">+ baseUrl: String</text>
+    <text class="field" x="18" y="176">+ status: WorkerStatus</text>
+    <text class="field" x="18" y="199">+ slotCount: Integer</text>
+    <text class="field" x="18" y="222">+ lastHeartbeatAt: Instant</text>
+  </g>
+
+  <!-- request logs -->
+  <g transform="translate(1170 555)">
+    <rect class="box log" width="330" height="250"/>
+    <path class="header log" d="M 0 8 Q 0 0 8 0 H 322 Q 330 0 330 8 V 58 H 0 Z"/>
+    <text class="class-name" x="18" y="28">request_logs</text>
+    <text class="stereo" x="18" y="47">&lt;&lt;collection&gt;&gt;</text>
+    <text class="field" x="18" y="84">+ _id: String</text>
+    <text class="field" x="18" y="107">+ projectId: String, indexed</text>
+    <text class="field" x="18" y="130">+ instanceId: String, indexed</text>
+    <text class="field" x="18" y="153">+ method/path/queryString</text>
+    <text class="field" x="18" y="176">+ requestHeaders: Map</text>
+    <text class="field" x="18" y="199">+ responseStatus: Integer</text>
+    <text class="field" x="18" y="222">+ matched/source/latencyMs</text>
+  </g>
+
+  <!-- embedded documents -->
+  <g transform="translate(60 500)">
+    <rect class="box embedded" width="380" height="175"/>
+    <path class="header embedded" d="M 0 8 Q 0 0 8 0 H 372 Q 380 0 380 8 V 52 H 0 Z"/>
+    <text class="class-name" x="18" y="28">ProjectMember</text>
+    <text class="stereo" x="18" y="46">&lt;&lt;embedded in projects.members&gt;&gt;</text>
+    <text class="field" x="18" y="78">+ userId/email/username: String</text>
+    <text class="field" x="18" y="101">+ role: ProjectRole</text>
+    <text class="field" x="18" y="124">+ addedAt: Instant</text>
+  </g>
+
+  <g transform="translate(60 735)">
+    <rect class="box embedded" width="380" height="200"/>
+    <path class="header embedded" d="M 0 8 Q 0 0 8 0 H 372 Q 380 0 380 8 V 52 H 0 Z"/>
+    <text class="class-name" x="18" y="28">MockScenario</text>
+    <text class="stereo" x="18" y="46">&lt;&lt;embedded in mock_instances.scenarios&gt;&gt;</text>
+    <text class="field" x="18" y="78">+ id/enabled/priority</text>
+    <text class="field" x="18" y="101">+ operationId/method/pathTemplate</text>
+    <text class="field" x="18" y="124">+ statusCode/contentType</text>
+    <text class="field" x="18" y="147">+ body/headers/delayMs</text>
+    <text class="field" x="18" y="170">+ createdAt/updatedAt</text>
+  </g>
+
+  <g transform="translate(480 815)">
+    <rect class="box embedded" width="330" height="170"/>
+    <path class="header embedded" d="M 0 8 Q 0 0 8 0 H 322 Q 330 0 330 8 V 52 H 0 Z"/>
+    <text class="class-name" x="18" y="28">ResponseRule</text>
+    <text class="stereo" x="18" y="46">&lt;&lt;embedded in mock_instances.responseRules&gt;&gt;</text>
+    <text class="field" x="18" y="78">+ operationId/method/pathTemplate</text>
+    <text class="field" x="18" y="101">+ fieldPath/type/template</text>
+    <text class="field" x="18" y="124">+ fixed/min/max/enumValues</text>
+    <text class="field" x="18" y="147">+ enabled/priority/timestamps</text>
+  </g>
+
+  <g transform="translate(850 815)">
+    <rect class="box embedded" width="330" height="170"/>
+    <path class="header embedded" d="M 0 8 Q 0 0 8 0 H 322 Q 330 0 330 8 V 52 H 0 Z"/>
+    <text class="class-name" x="18" y="28">MockProfile</text>
+    <text class="stereo" x="18" y="46">&lt;&lt;embedded in mock_instances.profiles&gt;&gt;</text>
+    <text class="field" x="18" y="78">+ id/name</text>
+    <text class="field" x="18" y="101">+ faultProfileEnabled</text>
+    <text class="field" x="18" y="124">+ faultErrorRate/statusCode</text>
+    <text class="field" x="18" y="147">+ latencyMinMs/latencyMaxMs</text>
+  </g>
+
+  <!-- legend -->
+  <g transform="translate(1230 850)">
+    <rect x="0" y="0" width="270" height="135" rx="8" fill="#ffffff" stroke="#cbd5e1"/>
+    <text class="legend-title" x="18" y="28">Обозначения</text>
+    <line x1="18" y1="52" x2="78" y2="52" class="relation"/>
+    <text class="legend" x="92" y="57">логическая ссылка</text>
+    <line x1="18" y1="83" x2="78" y2="83" class="embed-relation"/>
+    <text class="legend" x="92" y="88">вложенный документ</text>
+    <rect x="18" y="105" width="18" height="12" fill="#fff7ed" stroke="#fdba74"/>
+    <text class="legend" x="48" y="117">embedded object в MongoDB</text>
+  </g>
+</svg>

@@ -40,6 +40,7 @@ app:
     internal-secret: ${APP_RUNTIME_INTERNAL_SECRET:local-runtime-secret}
     stale-after-seconds: ${APP_RUNTIME_STALE_AFTER_SECONDS:30}
     heartbeat-interval-seconds: ${APP_RUNTIME_HEARTBEAT_INTERVAL_SECONDS:5}
+    worker-cleanup-after-seconds: ${APP_RUNTIME_WORKER_CLEANUP_AFTER_SECONDS:86400}
     max-slots-per-worker: ${APP_RUNTIME_MAX_SLOTS_PER_WORKER:250}
     slot-idle-ttl-seconds: ${APP_RUNTIME_SLOT_IDLE_TTL_SECONDS:1800}
     slot-cleanup-delay-ms: ${APP_RUNTIME_SLOT_CLEANUP_DELAY_MS:60000}
