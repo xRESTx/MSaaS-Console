@@ -1,0 +1,38 @@
+services:
+  mongo:
+    image: mongo:8
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.monolith
+    restart: unless-stopped
+    depends_on:
+      - mongo
+      - redis
+    environment:
+      MONGODB_URI: mongodb://mongo:27017/msaas
+      SPRING_MONGODB_URI: mongodb://mongo:27017/msaas
+      REDIS_URI: redis://redis:6379
+      JWT_SECRET: replace-this-development-secret-with-at-least-32-bytes
+      APP_PUBLIC_BASE_URL: http://localhost:8081
+      APP_CORS_ALLOWED_ORIGINS: http://localhost:8081
+      ADMIN_BOOTSTRAP_EMAIL: admin@example.com
+      APP_RUNTIME_ROLE: EMBEDDED
+      APP_RUNTIME_INTERNAL_SECRET: local-runtime-secret
+    ports:
+      - "8081:8081"
+
+volumes:
+  mongo-data:

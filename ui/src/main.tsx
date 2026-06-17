@@ -72,7 +72,7 @@ const publicText = {
     landingNavWorkflow: "Как работает",
     landingNavSecurity: "Доступ",
     landingHeroBadge: "Платформа управления mock API по OpenAPI-контрактам",
-    heroTitle: "Mock Server as a Service для разработки и тестирования API",
+    heroTitle: "Мок-сервисы за один клик",
     heroCopy: "MSaaS преобразует OpenAPI-спецификации в управляемые mock-сервисы с приватными проектами, сценариями ответов, профилями окружений и журналом запросов. Команды могут проверять интеграции до готовности основного backend-сервиса.",
     landingPrimaryCta: "Создать проект",
     landingSecondaryCta: "Открыть консоль",
@@ -175,7 +175,7 @@ const publicText = {
     landingNavWorkflow: "How it works",
     landingNavSecurity: "Access",
     landingHeroBadge: "Managed mock API platform for OpenAPI contracts",
-    heroTitle: "Mock Server as a Service for API development and testing",
+    heroTitle: "Mock services in one click",
     heroCopy: "MSaaS turns OpenAPI specifications into managed mock services with private projects, response scenarios, environment profiles, and request logs. Teams can validate integrations before the primary backend service is available.",
     landingPrimaryCta: "Create project",
     landingSecondaryCta: "Open console",
@@ -366,19 +366,19 @@ function PublicApp() {
               <h2>{authStep === "register" ? t.accountNew : authStep === "password" ? t.accountFound : t.authEntryTitle}</h2>
             </div>
             {authStep === "identifier" && (
-              <label>{t.emailOrUsername}<input value={authIdentifier} onChange={(event) => setAuthIdentifier(event.target.value)} autoFocus /></label>
+              <label>{t.emailOrUsername}<input value={authIdentifier} onChange={(event) => setAuthIdentifier(event.target.value)} /></label>
             )}
             {authStep === "password" && (
               <>
                 <p className="muted">{t.passwordHint}</p>
                 <Detail label={t.emailOrUsername} value={authIdentifier} />
-                <label>{t.password}<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoFocus /></label>
+                <label>{t.password}<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} /></label>
               </>
             )}
             {authStep === "register" && (
               <>
                 <p className="muted">{t.registerHint}</p>
-                <label>{t.email}<input value={email} onChange={(event) => setEmail(event.target.value)} autoFocus /></label>
+                <label>{t.email}<input value={email} onChange={(event) => setEmail(event.target.value)} /></label>
                 <label>{t.username}<input value={username} onChange={(event) => setUsername(event.target.value)} /></label>
                 <label>{t.password}<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} /></label>
               </>
@@ -434,6 +434,7 @@ function PublicApp() {
           </div>
         </header>
         <section className="landing-hero">
+          <div className="landing-hero-backdrop" aria-hidden="true" />
           <div className="landing-copy">
             <p className="eyebrow">{t.landingHeroBadge}</p>
             <h1>{t.heroTitle}</h1>
@@ -732,8 +733,8 @@ function Brand() {
     <a className="brand" href="/" aria-label="MSaaS home">
       <span className="brand-mark"><Server size={20} /></span>
       <span>
-        <strong>MSaaS</strong>
-        <small>Mock Server as a Service</small>
+        <strong>MSaaS Console</strong>
+        <small>Мок-сервисы за один клик</small>
       </span>
     </a>
   );
@@ -759,7 +760,7 @@ function LandingCard({ icon, title, body }: { icon: React.ReactNode; title: stri
 }
 
 function StatusPill({ ok, text }: { ok: boolean; text: string }) {
-  return <span className={`status-pill ${ok ? "ok" : "bad"}`}>{text}</span>;
+  return <span className={`status-pill ${ok ? "success" : "danger"}`}>{text}</span>;
 }
 
 function Detail({ label, value }: { label: string; value: string }) {

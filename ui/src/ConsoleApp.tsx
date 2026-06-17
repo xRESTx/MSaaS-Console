@@ -512,6 +512,7 @@ const text = {
     createProject: "Создать проект",
     dark: "Темная",
     delete: "Удалить",
+    edit: "Редактировать",
     deleteInstance: "Удалить инстанс",
     deleteInstanceDetail: "Публичная ссылка перестанет работать, а логи инстанса будут удалены.",
     deleteMember: "Удалить участника",
@@ -578,7 +579,7 @@ const text = {
     stateReset: "Runtime state сброшен",
     subtitle: "Консоль для приватных OpenAPI-проектов, warm Java slots, публичных mock-ссылок и диагностики.",
     continue: "Продолжить",
-    heroTitle: "Mock Server as a Service для разработки и тестирования API",
+    heroTitle: "Мок-сервисы за один клик",
     heroCopy: "MSaaS преобразует OpenAPI-спецификации в управляемые mock-сервисы с приватными проектами, сценариями ответов, профилями окружений и журналом запросов. Команды могут проверять интеграции до готовности основного backend-сервиса.",
     landingPrivate: "Приватные проекты",
     landingRuntime: "Публичный URL",
@@ -737,6 +738,7 @@ const text = {
     createProject: "Create project",
     dark: "Dark",
     delete: "Delete",
+    edit: "Edit",
     deleteInstance: "Delete instance",
     deleteInstanceDetail: "The public link will stop working and instance logs will be deleted.",
     deleteMember: "Remove member",
@@ -803,7 +805,7 @@ const text = {
     stateReset: "Runtime state reset",
     subtitle: "Console for private OpenAPI projects, warm Java slots, public mock links, and diagnostics.",
     continue: "Continue",
-    heroTitle: "Mock Server as a Service for API development and testing",
+    heroTitle: "Mock services in one click",
     heroCopy: "MSaaS turns OpenAPI specifications into managed mock services with private projects, response scenarios, environment profiles, and request logs. Teams can validate integrations before the primary backend service is available.",
     landingPrivate: "Private projects",
     landingRuntime: "Public URL",
@@ -2675,19 +2677,19 @@ export default function ConsoleApp() {
               <h2>{authStep === "register" ? t.accountNew : authStep === "password" ? t.accountFound : t.authEntryTitle}</h2>
             </div>
             {authStep === "identifier" && (
-              <label>{t.emailOrUsername}<input value={authIdentifier} onChange={(event) => setAuthIdentifier(event.target.value)} autoFocus /></label>
+              <label>{t.emailOrUsername}<input value={authIdentifier} onChange={(event) => setAuthIdentifier(event.target.value)} /></label>
             )}
             {authStep === "password" && (
               <>
                 <p className="muted">{t.passwordHint}</p>
                 <Detail label={t.emailOrUsername} value={authIdentifier} />
-                <label>{t.password}<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoFocus /></label>
+                <label>{t.password}<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} /></label>
               </>
             )}
             {authStep === "register" && (
               <>
                 <p className="muted">{t.registerHint}</p>
-                <label>{t.email}<input value={email} onChange={(event) => setEmail(event.target.value)} autoFocus /></label>
+                <label>{t.email}<input value={email} onChange={(event) => setEmail(event.target.value)} /></label>
                 <label>{t.username}<input value={username} onChange={(event) => setUsername(event.target.value)} /></label>
                 <label>{t.password}<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} /></label>
               </>
@@ -2735,16 +2737,6 @@ export default function ConsoleApp() {
                 <Plus size={17} />
                 {t.createNewProject}
               </button>
-              {projectCreateOpen && (
-                <div className="create-box create-popover">
-                  <label>{t.name}<input value={projectName} onChange={(event) => setProjectName(event.target.value)} /></label>
-                  <label>{t.description}<input value={projectDescription} onChange={(event) => setProjectDescription(event.target.value)} /></label>
-                  <button className="primary-button full" onClick={createProject} disabled={busy["create-project"]}>
-                    {busy["create-project"] ? <Loader2 className="spin" size={17} /> : <Plus size={17} />}
-                    {t.createProject}
-                  </button>
-                </div>
-              )}
             </div>
           </div>
           <div className="topbar-actions">
@@ -2764,6 +2756,31 @@ export default function ConsoleApp() {
             {shellControls}
           </div>
         </header>
+
+        {projectCreateOpen && (
+          <div className="modal-backdrop create-modal-backdrop" onClick={() => setProjectCreateOpen(false)}>
+            <section className="create-box create-modal" role="dialog" aria-modal="true" aria-labelledby="create-project-title" onClick={(event) => event.stopPropagation()}>
+              <div className="create-modal-heading">
+                <div>
+                  <p className="eyebrow">{t.projects}</p>
+                  <h2 id="create-project-title">{t.createNewProject}</h2>
+                </div>
+                <button className="icon-button small" onClick={() => setProjectCreateOpen(false)} title={t.cancel}>
+                  <XCircle size={16} />
+                </button>
+              </div>
+              <label>{t.name}<input value={projectName} onChange={(event) => setProjectName(event.target.value)} /></label>
+              <label>{t.description}<input value={projectDescription} onChange={(event) => setProjectDescription(event.target.value)} /></label>
+              <div className="button-row">
+                <button className="primary-button full" onClick={createProject} disabled={busy["create-project"]}>
+                  {busy["create-project"] ? <Loader2 className="spin" size={17} /> : <Plus size={17} />}
+                  {t.createProject}
+                </button>
+                <button className="soft-button" onClick={() => setProjectCreateOpen(false)}>{t.cancel}</button>
+              </div>
+            </section>
+          </div>
+        )}
 
         <header className="console-topbar">
           <div>
@@ -3255,7 +3272,7 @@ export default function ConsoleApp() {
                 </div>
                 <div className="card-actions">
                   <button className="soft-button" onClick={() => activateProfile(profile.id)} disabled={!canWrite || profile.id === activeProfile}>{lang === "ru" ? "Включить" : "Activate"}</button>
-                  <button className="soft-button" onClick={() => editProfile(profile)} disabled={!canWrite}>{t.save}</button>
+                  <button className="soft-button" onClick={() => editProfile(profile)} disabled={!canWrite}>{t.edit}</button>
                   <button className="icon-button danger-icon" onClick={() => deleteProfile(profile.id)} disabled={!canWrite}><Trash2 size={16} /></button>
                 </div>
               </div>
@@ -3324,7 +3341,7 @@ export default function ConsoleApp() {
                   <small>{scenario.statusCode ?? "-"} · {scenario.delayMs}ms</small>
                 </div>
                 <div className="card-actions">
-                  <button className="soft-button" onClick={() => editScenario(scenario)} disabled={!canWrite}>{t.save}</button>
+                  <button className="soft-button" onClick={() => editScenario(scenario)} disabled={!canWrite}>{t.edit}</button>
                   <button className="icon-button danger-icon" onClick={() => deleteScenario(scenario.id)} disabled={!canWrite}><Trash2 size={16} /></button>
                 </div>
               </div>
@@ -3405,7 +3422,7 @@ export default function ConsoleApp() {
                   <small>{rule.fieldPath} · {ruleTypeLabel(rule.type, lang)}</small>
                 </div>
                 <div className="card-actions">
-                  <button className="soft-button" onClick={() => editResponseRule(rule)} disabled={!canWrite}>{t.save}</button>
+                  <button className="soft-button" onClick={() => editResponseRule(rule)} disabled={!canWrite}>{t.edit}</button>
                   <button className="icon-button danger-icon" onClick={() => deleteResponseRule(rule.id)} disabled={!canWrite}><Trash2 size={16} /></button>
                 </div>
               </div>
@@ -3956,8 +3973,8 @@ function Brand() {
     <a className="brand" href="/" aria-label="MSaaS home">
       <span className="brand-mark"><Server size={20} /></span>
       <span>
-        <strong>MSaaS</strong>
-        <small>Mock Server as a Service</small>
+        <strong>MSaaS Console</strong>
+        <small>Мок-сервисы за один клик</small>
       </span>
     </a>
   );

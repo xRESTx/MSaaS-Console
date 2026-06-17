@@ -201,6 +201,23 @@ Runtime roles are controlled by environment variables:
 - `APP_RUNTIME_INTERNAL_SECRET` secures control-to-worker calls.
 - `REDIS_URI` points runtime state and distributed rate limits to Redis.
 
+## Run as a Monolith
+
+The monolith setup keeps MongoDB and Redis as infrastructure services, but exposes the application through a single `app` container and one public port:
+
+```powershell
+docker build -f Dockerfile.monolith -t msaas-console-app:latest .
+docker compose -f docker-compose.monolith.yml up -d --remove-orphans
+```
+
+Open:
+
+- App and UI: http://localhost:8081
+- Health: http://localhost:8081/actuator/health
+- Swagger UI: http://localhost:8081/swagger-ui.html
+
+In this mode the backend runs with `APP_RUNTIME_ROLE=EMBEDDED`. The monolith image reuses the local `msaas-console-server:latest` backend image, adds the current Vite production build, and serves everything through the same origin.
+
 ## Run Locally
 
 Backend requires Java 25, Maven, and MongoDB:
